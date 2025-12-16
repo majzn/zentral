@@ -1,0 +1,151 @@
+name: group_betting_field_circle_chips
+type: group
+
+width: $G_BF_CIRCLE_W
+height: $G_BF_CIRCLE_H
+
+transform:
+  anchor: ANCHOR_TOP_LEFT
+  position: [$G_BF_X, $G_BF_Y + $G_BF_CIRCLE_OFFSET]
+
+component: true
+component-name: chip_coloring
+component-properties:
+  value_state: "bet_key_value"
+  color_state: "state_chip_color"
+  multipliers_values: "button_x_value"
+  size_of_keys: "192"
+  max_num_of_multipliers: "9"
+  search_scope_first: "true"
+  plugin_update_callback: "callback_cc_circle_0"
+  plugin_refresh_callback: "callback_refresh_circle_0"
+  ignore_grey_chips: "true"
+  rectangles_enabled: "true" # if using rectangles
+  num_field_max_size: "350" # max size of the rectangle
+  min_rectangle_threshold: "160" # min text size.x for rectangle to show
+  rectangle_height: "80" # height got overran
+  rectangle_padding: "20" # padding for text (only works on x, not on y)
+  chip_selected_property: "not_used"
+  use_custom_chip_graphics: "true"
+
+stateful-transitions:
+  - condition: (betting_field_circle_visible == 1 or betting_field_strategy_visible == 1)
+    update-on-start: true
+    scenario-in: ani_show
+    scenario-out: ani_hide
+
+animations:
+  - name: ani_show
+    animation-fps: 60
+    tracks:
+      - track-set-value: group_betting_field_circle_chips HIDDEN 0 0
+      - track-call-callback: ani_hide ANIMATION_STOP
+  - name: ani_hide
+    animation-fps: 60
+    tracks:
+      - track-set-value: group_betting_field_circle_chips HIDDEN 0 1
+      - track-call-callback: ani_show ANIMATION_STOP
+
+children:
+  - type: iterator
+    start: 0
+    end: 3
+
+    indexed-constants:
+      tif: [$G_NOT_SPAIN, $G_IS_SPAIN, $G_IS_SPAIN]
+      y_offset: [0, 30, 30]
+      visible_condition: [
+          1 == 1,
+          (betting_field_circle_90 == 0),
+          (betting_field_circle_90 == 1)
+        ]
+      coords_prop: [
+          bet_key_positions_circle,
+          bet_key_positions_circle,
+          bet_key_positions_circle_90
+        ]
+
+    template:
+      - name: group_chips
+        type: group
+
+        tools-if: $tif
+
+        width: $G_BF_CIRCLE_W
+        height: $G_BF_CIRCLE_H
+
+        transform:
+          anchor: ANCHOR_TOP_LEFT
+          position: [0, 0 + $y_offset]
+
+        stateful-transitions:
+          - condition: $visible_condition
+            update-on-start: true
+            scenario-in: ani_show
+            scenario-out: ani_hide
+
+        animations:
+          - name: ani_show
+            animation-fps: 60
+            tracks:
+              - track-set-value: HIDDEN 0 0
+
+          - name: ani_hide
+            animation-fps: 60
+            tracks:
+              - track-set-value: HIDDEN 0 1
+
+        children:
+          - type: iterator
+            start: 0
+            end: $G_CIRCLE_KEYS
+            index-name: j
+            constants:
+              is_square: (0 == 1)
+              sm_prop: ${coords_prop}
+            indexed-constants:
+              key:
+                [
+                  7,
+                  9,
+                  11,
+                  13,
+                  25,
+                  27,
+                  29,
+                  41,
+                  43,
+                  45,
+                  57,
+                  59,
+                  61,
+                  73,
+                  75,
+                  77,
+                  89,
+                  91,
+                  93,
+                  105,
+                  107,
+                  109,
+                  121,
+                  123,
+                  125,
+                  137,
+                  139,
+                  141,
+                  153,
+                  155,
+                  157,
+                  169,
+                  171,
+                  173,
+                  185,
+                  187,
+                  189,
+                  6,
+                  30
+                ]
+            template:
+              - !include: _chip.yaml
+              - !include: _chip_vertical.yaml

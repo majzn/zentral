@@ -1,0 +1,527 @@
+name: ${grp_el}
+constants:
+  grp_el: group_chips_$key
+  value_el: text_chip_value_${j}
+  x_array: $key * 2
+  y_array: $key * 2 + 1
+
+  win_anim_time: 30
+  win_anim_delay: 150
+  collect_anim_time: 30 # 30
+  collect_anim_delay: ($win_anim_delay + 150)
+
+type: group
+tools-if: $G_NOT_VERTICAL
+width: 100
+height: 100
+
+transform:
+  anchor: ANCHOR_MIDDLE_CENTER
+  #alignment: ALIGNMENT_MIDDLE_CENTER
+  position: [0, 0]
+  scale: [$G_CHIP_X_SCALE, $G_CHIP_Y_SCALE, 1]
+
+state-links:
+  - name: state_link_x
+    state-link-description: "link for x position"
+    state-state-machine-source-property-name: ${sm_prop}
+    state-state-machine-source-property-index: ${x_array}
+    state-source-property: SOURCE_STATEMACHINE_PROPERTY_INT
+    state-target-entity-name: ${grp_el}
+    state-target-property: TARGET_ENTITY_POSITION_X
+    state-link-initial-state: UPDATE_ONCE
+  - name: state_link_y
+    state-link-description: "link for y position"
+    state-state-machine-source-property-name: ${sm_prop}
+    state-state-machine-source-property-index: ${y_array}
+    state-source-property: SOURCE_STATEMACHINE_PROPERTY_INT
+    state-target-entity-name: ${grp_el}
+    state-target-property: TARGET_ENTITY_POSITION_Y
+    state-link-initial-state: UPDATE_ONCE
+
+  - name: text_width
+    state-link-description: "text_size"
+    state-target-property: TARGET_ENTITY_WIDTH
+    state-source-property: SOURCE_ENTITY_WIDTH
+    state-source-entity-name: ${value_el}
+    state-target-entity-name: ${value_el}_copy
+    state-link-initial-state: DISABLED
+    state-transform-type: TRANSFORM_LINEAR_PARAMS
+    state-transform-params: [1, 0]
+  - name: text_height
+    state-link-description: "text_size"
+    state-target-property: TARGET_ENTITY_HEIGHT
+    state-source-property: SOURCE_ENTITY_HEIGHT
+    state-source-entity-name: ${value_el}
+    state-target-entity-name: ${value_el}_copy
+    state-link-initial-state: DISABLED
+    state-transform-type: TRANSFORM_LINEAR_PARAMS
+    state-transform-params: [1, 0]
+
+events:
+  - event-name: ANIMATE_CHIPS_TO_COUNTER_EVENT
+    event-target-name: ani_chips_collect
+    event-target-type: EVENT_TARGET_ANIMATION
+    callback: animation_start
+  - event-name: ANIMATE_CHIPS_TRANSPARENCY
+    event-target-name: chip_alpha_transparency_event
+    event-target-type: EVENT_TARGET_ANIMATION
+    callback: animation_start
+  - event-name: EVENT_BET_PLACED_ANIMATION$key
+    event-target-name: ani_on_press_down
+    event-target-type: EVENT_TARGET_ANIMATION
+    callback: animation_start
+
+stateful-transitions:
+  - condition: bet_key_value[$key] > 0
+    update-on-start: true
+    scenario-in: chip_alpha_up
+
+  - condition: bet_key_value[$key] == 0 and game_status == 0
+    update-on-start: true
+    scenario-in: chip_alpha_down
+
+  - condition: bet_key_value[$key] == 0 and game_status == 1
+    update-on-start: true
+    scenario-in: chip_alpha_down
+
+  - condition: bet_key_value[$key] == 0 and game_status == 2
+    update-on-start: true
+    scenario-in: chip_losing_animation
+
+  - condition: game_status == 1
+    update-on-start: true
+    scenario-in: chip_update_values
+
+  - condition: game_status == 0
+    update-on-start: true
+    scenario-in: stop_all_anims
+
+    #
+  - condition: bet_key_value[3] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==7 and $G_IS_SINGLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: bet_key_value[3] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==7 and $G_IS_SINGLE_ZERO
+    scenario-in: zero_field_normal
+
+  # 0 on double zero
+  - condition: (bet_key_value[1] > 0 or bet_key_value[2] > 0) and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==7 and $G_IS_DOUBLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: (bet_key_value[1] == 0 and bet_key_value[2] == 0) and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==7 and $G_IS_DOUBLE_ZERO
+    scenario-in: zero_field_normal
+
+  # 00
+  - condition: (bet_key_value[4] > 0 or bet_key_value[5] > 0) and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==6 and $G_IS_DOUBLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: (bet_key_value[4] == 0 and bet_key_value[5] == 0) and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==6 and $G_IS_DOUBLE_ZERO
+    scenario-in: zero_field_normal
+
+  # 0/00 split
+  - condition: bet_key_value[3] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==23 and $G_IS_DOUBLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: bet_key_value[3] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==23 and $G_IS_DOUBLE_ZERO
+    scenario-in: zero_field_normal
+
+########## triple zero offsets ###########################################
+  # 0/000 split
+  - condition: bet_key_value[7] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==62 and $G_IS_TRIPLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: bet_key_value[7] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==62 and $G_IS_TRIPLE_ZERO
+    scenario-in: zero_field_normal
+
+  # 00/000 split
+  - condition: bet_key_value[6] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==54 and $G_IS_TRIPLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: bet_key_value[6] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==54 and $G_IS_TRIPLE_ZERO
+    scenario-in: zero_field_normal
+
+  # 0/00 split
+  - condition: bet_key_value[3] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==23 and $G_IS_TRIPLE_ZERO
+    scenario-in: zero_field_offset
+  - condition: bet_key_value[3] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==23 and $G_IS_TRIPLE_ZERO
+    scenario-in: zero_field_normal
+###########################################################################
+
+    #1-12
+  - condition: bet_key_value[32] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==39 and $G_NOT_SPAIN
+    scenario-in: dozens_offset
+  - condition: bet_key_value[32] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==39 and $G_NOT_SPAIN
+    scenario-in: dozens_normal
+
+    # 13-24
+  - condition: bet_key_value[96] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==119 and $G_NOT_SPAIN
+    scenario-in: dozens_offset
+  - condition: bet_key_value[96] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==119 and $G_NOT_SPAIN
+    scenario-in: dozens_normal
+
+    # 25-36
+  - condition: bet_key_value[160] > 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==167 and $G_NOT_SPAIN
+    scenario-in: dozens_offset
+  - condition: bet_key_value[160] == 0 and game_status != 2 and $is_square
+    update-on-start: true
+    context: $key==167 and $G_NOT_SPAIN
+    scenario-in: dozens_normal
+
+    # 1-12 / 13-24
+  - condition: bet_key_value[64] > 0 and game_status != 2
+    update-on-start: true
+    context: $j==55 and $G_IS_FRANCE
+    scenario-in: dozens_offset
+  - condition: bet_key_value[64] == 0 and game_status != 2
+    update-on-start: true
+    context: $j==55 and $G_IS_FRANCE
+    scenario-in: dozens_normal
+
+    # 13-24 / 25-36
+  - condition: bet_key_value[128] > 0 and game_status != 2
+    update-on-start: true
+    context: $j==127 and $G_IS_FRANCE
+    scenario-in: dozens_offset
+  - condition: bet_key_value[128] == 0 and game_status != 2
+    update-on-start: true
+    context: $j==127 and $G_IS_FRANCE
+    scenario-in: dozens_normal
+
+animations:
+  - name: ani_on_press_down
+    animation-fps: 60
+    tracks:
+      - track-set-value: group_chip SIZE 0 0.95
+      - track-set-value: group_chip SIZE 5 1
+      - track-set-value: line_glow ALPHA 0 1
+      - track-easing: line_glow SIZE EASE_OUT_QUART BEGIN_TO_END  0.9 1.5 15 0
+      - track-easing: line_glow LINE_WIDTH EASE_OUT_QUART BEGIN_TO_END 25 0 15 0
+      - track-easing: line_glow LINE_FEATHER_LEFT_WIDTH EASE_OUT_QUART BEGIN_TO_END 6 3 15 0
+      - track-easing: line_glow LINE_FEATHER_RIGHT_WIDTH EASE_OUT_QUART BEGIN_TO_END 6 3 15 0
+      - track-easing: line_glow ALPHA EASE_OUT_QUART BEGIN_TO_END 1 0 5 10
+
+  - name: chip_alpha_transparency_event
+    animation-fps: 60
+    animation-loop: 0
+    tracks:
+      - track-set-value: group_chip ALPHA 0 1
+      - track-set-value: group_chip ALPHA 20 1
+      - track-set-value: group_chip ALPHA 30 1
+      - track-set-value: group_chip ALPHA 40 1
+      - track-set-value: group_chip ALPHA 50 1
+
+  - name: chip_alpha_up
+    animation-fps: 60
+    tracks:
+      - track-set-value: group_chip HIDDEN 0 0
+      #- track-easing: SIZE LINEAR BEGIN_TO_END 0.6 1 5 0
+
+  - name: chip_alpha_down
+    animation-fps: 60
+    tracks:
+      - track-set-value: group_chip HIDDEN 0 1
+      - track-set-value: rectangle HIDDEN 0 1
+
+  - name: stop_all_anims
+    animation-fps: 60
+    tracks:
+      - track-set-value: ${value_el}_copy HIDDEN 0 1
+      - track-call-callback: ani_chips_collect ANIMATION_STOP
+      - track-call-callback: chip_losing_animation ANIMATION_STOP
+      - track-call-callback: ${value_el}_copy TEXT_ATTRIBUTE_UPDATE
+      - track-call-callback: ani_chips_win ANIMATION_START 5
+
+  - name: ani_chips_collect
+    animation-fps: 60
+    tracks:
+      - track-set-value: ${value_el}_copy HIDDEN 0 1
+      - track-set-value: rectangle HIDDEN 0 25
+      - track-easing: ${grp_el} POSITION_X EASE_IN_QUART CURRENT_TO_END 1200 ${collect_anim_time} 0
+      - track-easing: ${grp_el} POSITION_Y EASE_IN_QUART CURRENT_TO_END 2000 ${collect_anim_time} 0
+      - track-easing: group_chip ALPHA LINEAR BEGIN_TO_END 1 0 5 25
+      - track-call-callback: ani_chips_win ANIMATION_START ${win_anim_time}
+
+  - name: ani_chips_win
+    animation-fps: 60
+    tracks:
+      - track-set-value: ${grp_el} POSITION_X 0 ${sm_prop}:$x_array
+      - track-set-value: ${grp_el} POSITION_Y 0 ${sm_prop}:$y_array
+
+  - name: chip_losing_animation
+    animation-fps: 60
+    animation-delay: 120
+    tracks:
+      - track-easing: ${grp_el} POSITION_Y EASE_IN_QUINT RELATIVE_TO_CURRENT 150 25 0
+      - track-easing: group_chip ALPHA LINEAR BEGIN_TO_END 1 0 15 10
+      - track-easing: rectangle ALPHA LINEAR BEGIN_TO_END 1 0 15 10
+      - track-set-value: ${value_el}_copy HIDDEN 0 0
+      - track-set-value: group_chip POSITION_Y 25 0
+      - track-set-value: group_chip ALPHA 25 1
+      - track-set-value: group_chip HIDDEN 25 1
+      - track-set-value: rectangle POSITION_Y 25 -2
+      - track-set-value: rectangle ALPHA 25 1
+      - track-set-value: rectangle HIDDEN 25 1
+      - track-set-value: ${value_el}_copy HIDDEN 25 1
+
+  #zero only
+  - name: zero_field_normal
+    animation-fps: 60    
+    tracks:
+      - track-easing: group_chip POSITION_X EASE_IN_OUT_SINE CURRENT_TO_END $G_ZERO_CHIP_X_NORMAL 15 0
+      - track-call-callback: zero_field_offset ANIMATION_STOP
+
+  - name: zero_field_offset
+    animation-fps: 60
+    tracks:
+      - track-easing: group_chip POSITION_X EASE_IN_OUT_SINE CURRENT_TO_END $G_ZERO_CHIP_X_OFFSET 15 0
+      - track-call-callback: zero_field_normal ANIMATION_STOP
+
+  #1-12 13-24 25-36
+  - name: dozens_normal
+    animation-fps: 60
+    tracks:
+      - track-easing: group_chip POSITION_Y EASE_IN_OUT_SINE CURRENT_TO_END $G_DOZENS_CHIP_Y_NORMAL 15 0
+      - track-call-callback: dozens_offset ANIMATION_STOP
+
+  - name: dozens_offset
+    animation-fps: 60
+    tracks:
+      - track-easing: group_chip POSITION_Y EASE_IN_OUT_SINE CURRENT_TO_END $G_DOZENS_CHIP_Y_OFFSET 15 0
+      - track-call-callback: dozens_normal ANIMATION_STOP
+
+  # - name: chip_update_values
+  #   animation-fps: 60
+  #     - track-callback: TRACK_CALLBACK_ANIMATION_STOP
+  #       track-callback-keyframe: 60
+  #       track-callback-target-name: ani_chips_win
+  #       track-callback-target-type: TRACK_TARGET_ANIMATION
+
+  - name: chip_update_values
+    animation-fps: 60
+    tracks:
+      - track-set-value: ${value_el}_copy HIDDEN 5 0
+      - track-call-callback: ${value_el}_copy TEXT_ATTRIBUTE_UPDATE
+      - track-call-callback: text_height STATE_LINK_ENABLE_ONCE
+      - track-call-callback: text_width STATE_LINK_ENABLE_ONCE
+
+children:
+  - name: group_chip
+    type: group
+
+    width: 256
+    height: 256
+
+    transform:
+      anchor: ANCHOR_MIDDLE_CENTER
+      alignment: ALIGNMENT_MIDDLE_CENTER
+
+    children:
+      - type: line
+        name: line_glow
+        transform:
+          anchor: ANCHOR_MIDDLE_CENTER
+          alignment: ALIGNMENT_MIDDLE_CENTER
+          position: [0, 0]
+          alpha: 0
+        line-color: "#fff"
+        line-width: 30
+        line-feather: 8
+        line-feather-color: "#fff"
+        circle-points: 100
+        circle-radius: 200
+
+      - name: image_bg_$key
+        type: image
+        image-color-animation: true
+        color: "#000000"
+        atlas: global
+        src: chip/chip_overlay.png
+        src-root: assets/images/
+        transform:
+          anchor: ANCHOR_MIDDLE_CENTER
+          alignment: ALIGNMENT_MIDDLE_CENTER
+          position: [0, 0]
+        tags:
+          - chip_tag_$key
+
+      - name: image_chip_$key
+        type: image
+        atlas: global
+        src: chip/chip_base.png
+        src-root: assets/images/
+        transform:
+          anchor: ANCHOR_MIDDLE_CENTER
+          alignment: ALIGNMENT_MIDDLE_CENTER
+          position: [0, 0]
+        tags:
+          - face_$key
+
+      - name: rectangle
+        type: rectangle
+        #touchable: false
+        hidden: true
+        transform:
+          anchor: ANCHOR_MIDDLE_CENTER
+          alignment: ALIGNMENT_MIDDLE_CENTER
+          position: [0, -2]
+        # rectangle width and height
+        rectangle-width: 300
+        rectangle-height: 80
+        # rectangle color when no gradient colors provided
+        rectangle-color: "#fff"
+        rectangle-border-color: "#F00"
+        rectangle-border-width: 7
+        # gradient offset
+        rectangle-gradient-offset: 0
+        rectangle-smooth-edge: false
+        rectangle-corner-radious: 0.3
+        tags:
+          - chip_tag_$key
+
+      - name: ${value_el}_copy
+        type: text
+        transform:
+          anchor: ANCHOR_MIDDLE_CENTER
+          alignment: ALIGNMENT_MIDDLE_CENTER
+          position: [0, 0]
+          #scale: [0.7,0.7,1]
+        text: "{0}"
+        text-size: 4
+        text-font: roboto-condensed
+        text-color: "#000"
+        text-soften: 0.10
+        text-font-keep-default: true
+        hidden: true
+        text-max-width: 300
+        text-max-height: 20
+        text-overflow: TEXT_OVERFLOW_SCALE
+        text-alignment-horizontal: TEXT_ALIGNMENT_HORIZONTAL_CENTER
+        text-alignment-vertical: TEXT_ALIGNMENT_VERTICAL_MIDDLE
+        #text-max-size: 4
+        text-min-size: 0.2
+        text-translation:
+          term: common.placeholder
+          term-attributes:
+            - index: 0
+              property: bet_key_value
+              property-index: $key
+              format: FORMAT_CURRENCY
+              format-text-min-width: 1
+              format-text-align: ALIGN_CENTER
+              format-text-fill: FILL_SPACE
+              update-on-change: false
+              format-currency-specification: table
+
+        state-links:
+          - name: state_link_alpha
+            state-link-description: "alpha link for credits transparency"
+            state-state-machine-source-property-name: fade_level
+            state-source-property: SOURCE_STATEMACHINE_PROPERTY_FLOAT
+            state-target-entity-name: ${value_el}_copy
+            state-target-property: TARGET_ENTITY_ALPHA
+            state-link-initial-state: ENABLED
+
+        stateful-transitions:
+          - condition: game_status == 0
+            update-on-start: true
+            scenario-in: hide_value
+        animations:
+          - name: hide_value
+            animation-fps: 30
+            animation-loop: 0
+            tracks:
+              - track-set-value: ${value_el}_copy HIDDEN      0      1
+
+      - name: ${value_el}
+        type: text
+        transform:
+          anchor: ANCHOR_MIDDLE_CENTER
+          alignment: ALIGNMENT_MIDDLE_CENTER
+          position: [0, 0]
+          #scale: [0.7,0.7,1]
+        text: "{0}"
+        text-size: 4
+        text-font: roboto-condensed
+        text-color: "#000"
+        text-soften: 0.10
+        text-font-keep-default: true
+        tags:
+          - chip_tag_$key
+        hidden: true
+        # text-max-width: 300
+        # text-max-height: 300
+        text-overflow: TEXT_OVERFLOW_SCALE
+        text-alignment-horizontal: TEXT_ALIGNMENT_HORIZONTAL_CENTER
+        text-alignment-vertical: TEXT_ALIGNMENT_VERTICAL_MIDDLE
+        #text-max-size: 4
+        text-min-size: 0.2
+        text-translation:
+          term: common.placeholder
+          term-attributes:
+            - index: 0
+              property: bet_key_value
+              property-index: $key
+              format: FORMAT_CURRENCY
+              format-text-min-width: 1
+              format-text-align: ALIGN_CENTER
+              format-text-fill: FILL_SPACE
+              update-on-change: true
+              format-currency-specification: table
+        stateful-transitions:
+          - condition: bet_key_value[${key}] > 0 #and game_status == 0
+            update-on-start: true
+            scenario-in: show_value
+            scenario-out: hide_value
+
+        state-links:
+          - name: state_link_alpha
+            state-link-description: "alpha link for credits transparency"
+            state-state-machine-source-property-name: fade_level
+            state-source-property: SOURCE_STATEMACHINE_PROPERTY_FLOAT
+            state-target-entity-name: ${value_el}
+            state-target-property: TARGET_ENTITY_ALPHA
+            state-link-initial-state: ENABLED
+        animations:
+          - name: show_value
+            animation-fps: 30
+            animation-loop: 0
+            tracks:
+              - track-set-value: ${value_el}  HIDDEN      0      0
+
+          - name: hide_value
+            animation-fps: 30
+            animation-loop: 0
+            tracks:
+              - track-set-value: ${value_el} HIDDEN      0      1

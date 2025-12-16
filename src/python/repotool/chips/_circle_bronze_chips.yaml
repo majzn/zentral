@@ -1,0 +1,607 @@
+name: group_betting_field_circle_bronze_chips
+type: group
+transform:
+  anchor: ANCHOR_TOP_LEFT
+  position: [$G_BF_X, $G_BF_Y + $G_BF_CIRCLE_OFFSET + 27] # manual y offset
+component: true
+component-name: chip_coloring
+component-properties:
+  value_state: "split_chip_key_sum_value"
+  color_state: "state_chip_color"
+  multipliers_values: "button_x_value"
+  size_of_keys: "192"
+  max_num_of_multipliers: "9"
+  plugin_update_callback: "callback_cc_circle_0"
+  plugin_refresh_callback: "callback_refresh_circle_0"
+  ignore_grey_chips: "true"
+  rectangles_enabled: "true" # if using rectangles
+  num_field_max_size: "350" # max size of the rectangle
+  min_rectangle_threshold: "160" # min text size.x for rectangle to show
+  rectangle_height: "80" # height got overran
+  rectangle_padding: "20" # padding for text (only works on x, not on y)
+stateful-transitions:
+  - condition: split_chip_enabled == 1 and betting_field_circle_visible == 1
+    update-on-start: true
+    scenario-in: ani_show
+    scenario-out: ani_hide
+animations:
+  - name: ani_show
+    animation-fps: 30
+    tracks:
+      - track-set-value: group_betting_field_circle_bronze_chips HIDDEN 0 0
+      - track-callback: TRACK_CALLBACK_ANIMATION_STOP
+        track-callback-keyframe: 0
+        track-callback-target-name: ani_hide
+        track-callback-target-type: TRACK_TARGET_ANIMATION
+  - name: ani_hide
+    animation-fps: 30
+    tracks:
+      - track-set-value: group_betting_field_circle_bronze_chips HIDDEN 0 1
+      - track-callback: TRACK_CALLBACK_ANIMATION_STOP
+        track-callback-keyframe: 0
+        track-callback-target-name: ani_show
+        track-callback-target-type: TRACK_TARGET_ANIMATION
+children:
+  - name: group_chips
+    type: group
+    width: 1650
+    height: 670
+    transform:
+      anchor: ANCHOR_TOP_LEFT
+      position: [0, 0]
+
+    children:
+      - type: iterator
+        start: 0
+        end: 37
+        index-name: j
+        indexed-constants:
+          key:
+            [
+              7,
+              9,
+              11,
+              13,
+              25,
+              27,
+              29,
+              41,
+              43,
+              45,
+              57,
+              59,
+              61,
+              73,
+              75,
+              77,
+              89,
+              91,
+              93,
+              105,
+              107,
+              109,
+              121,
+              123,
+              125,
+              137,
+              139,
+              141,
+              153,
+              155,
+              157,
+              169,
+              171,
+              173,
+              185,
+              187,
+              189,
+              6,
+              30
+            ]
+            
+        template:
+          - name: ${grp_el}
+            constants:
+              grp_el: group_chips_$key
+              value_el: text_chip_value_${j}
+              x_array: $key * 2
+              y_array: $key * 2 + 1
+            type: group
+            width: 100
+            height: 100
+            transform:
+              anchor: ANCHOR_MIDDLE_CENTER
+              #alignment: ALIGNMENT_MIDDLE_CENTER
+              position: [0, 0]
+              scale: [0.8, 0.8, 1]
+            state-links:
+              - name: state_link_x
+                state-link-description: "link for x position"
+                state-state-machine-source-property-name: bet_key_positions_circle
+                state-state-machine-source-property-index: ${x_array}
+                state-source-property: SOURCE_STATEMACHINE_PROPERTY_INT
+                state-target-entity-name: ${grp_el}
+                state-target-property: TARGET_ENTITY_POSITION_X
+                state-link-initial-state: UPDATE_ONCE
+              - name: state_link_y
+                state-link-description: "link for y position"
+                state-state-machine-source-property-name: bet_key_positions_circle
+                state-state-machine-source-property-index: ${y_array}
+                state-source-property: SOURCE_STATEMACHINE_PROPERTY_INT
+                state-target-entity-name: ${grp_el}
+                state-target-property: TARGET_ENTITY_POSITION_Y
+                state-link-initial-state: UPDATE_ONCE
+            events:
+              - event-name: ANIMATE_CHIPS_TO_COUNTER_EVENT
+                event-target-name: ani_chips_to_counter
+                event-target-type: EVENT_TARGET_ANIMATION
+                callback: animation_start
+              - event-name: ANIMATE_CHIPS_TRANSPARENCY
+                event-target-name: chip_alpha_transparency_event
+                event-target-type: EVENT_TARGET_ANIMATION
+                callback: animation_start
+              - event-name: EVENT_BET_PLACED_ANIMATION$key
+                event-target-name: ani_on_press_down
+                event-target-type: EVENT_TARGET_ANIMATION
+                callback: animation_start
+            stateful-transitions:
+              - condition: split_chip_key_enabled[$key] > 0 or split_chip_key_sum_value[$key] > 0
+                update-on-start: true
+                scenario-in: chip_alpha_up
+              - condition: game_status == 0 and (split_chip_key_enabled[$key] == 0 or split_chip_key_sum_value[$key] == 0    )
+                update-on-start: true
+                scenario-in: chip_alpha_down
+              - condition: game_status == 1 and (split_chip_key_enabled[$key] == 0 or split_chip_key_sum_value[$key] == 0    )
+                update-on-start: true
+                scenario-in: chip_alpha_down
+              - condition: game_status == 2 and (split_chip_key_enabled[$key] == 0 or split_chip_key_sum_value[$key] == 0    )
+                update-on-start: true
+                scenario-in: chip_losing_animation
+              - condition: game_status == 1
+                update-on-start: true
+                scenario-in: chip_update_values
+              - condition: game_status == 0
+                update-on-start: true
+                scenario-in: stop_all_anims
+
+            animations:
+              - name: ani_on_press_down
+                animation-fps: 60
+                animation-loop: 0
+                tracks:
+                  - track-set-value: image_overlay SIZE 0 0.95
+                  - track-set-value: image_overlay SIZE 5 1
+                  - track-set-value: line_glow ALPHA 0 1
+                  - track-easing: line_glow SIZE EASE_OUT_QUART BEGIN_TO_END  0.9 1.5 15 0
+                  - track-easing: line_glow LINE_WIDTH EASE_OUT_QUART BEGIN_TO_END 25 0 15 0
+                  - track-easing: line_glow LINE_FEATHER_LEFT_WIDTH EASE_OUT_QUART BEGIN_TO_END 6 3 15 0
+                  - track-easing: line_glow LINE_FEATHER_RIGHT_WIDTH EASE_OUT_QUART BEGIN_TO_END 6 3 15 0
+                  - track-easing: line_glow ALPHA EASE_OUT_QUART BEGIN_TO_END 1 0 5 10
+
+              - name: chip_alpha_transparency_event
+                animation-fps: 30
+                animation-loop: 0
+                tracks:
+                  - track-set-value: image_overlay ALPHA 0 1
+                  - track-set-value: image_overlay ALPHA 10 1
+                  - track-set-value: image_overlay ALPHA 15 1
+                  - track-set-value: image_overlay ALPHA 20 1
+                  - track-set-value: image_overlay ALPHA 25 1
+
+              - name: chip_alpha_up
+                animation-fps: 30
+                animation-loop: 0
+                tracks:
+                  - track-set-value: image_overlay HIDDEN 0 0
+                  #- track-easing: image_overlay SIZE LINEAR BEGIN_TO_END 0.6 1 5 0
+
+              - name: chip_alpha_down
+                animation-fps: 30
+                animation-loop: 0
+                tracks:
+                  - track-set-value: image_overlay HIDDEN 0 1
+                  - track-set-value: rectangle HIDDEN 0 1
+
+              - name: stop_all_anims
+                animation-fps: 30
+                animation-loop: 0
+                tracks:
+                  - track-set-value: ${value_el}_copy HIDDEN 0 1
+                  - track-callback: TRACK_CALLBACK_ANIMATION_STOP
+                    track-callback-keyframe: 0
+                    track-callback-target-name: ani_chips_to_counter
+                    track-callback-target-type: TRACK_TARGET_ANIMATION
+                  - track-callback: TRACK_CALLBACK_ANIMATION_STOP
+                    track-callback-keyframe: 0
+                    track-callback-target-name: chip_losing_animation
+                    track-callback-target-type: TRACK_TARGET_ANIMATION
+                  - track-callback: TRACK_CALLBACK_ANIMATION_START
+                    track-callback-keyframe: 0
+                    track-callback-target-name: ani_chips_to_field
+                    track-callback-target-type: TRACK_TARGET_ANIMATION
+                  - track-callback: TRACK_CALLBACK_TEXT_ATTRIBUTE_UPDATE
+                    track-callback-keyframe: 0
+                    track-callback-target-name: ${value_el}_copy
+                    track-callback-target-type: TRACK_TARGET_TEXT_ATTRIBUTE
+
+              - name: ani_chips_to_counter
+                animation-fps: 60
+                animation-loop: 0
+                tracks:
+                  - track-set-value: ${value_el}_copy HIDDEN 0 1
+                  - track-set-value: rectangle HIDDEN 0 25
+                  - track-easing: ${grp_el} POSITION_X LINEAR CURRENT_TO_END 1300 30 0
+                  - track-easing: ${grp_el} POSITION_Y LINEAR CURRENT_TO_END 2000 30 0
+                  - track-easing: image_overlay ALPHA LINEAR BEGIN_TO_END 1 0 5 25
+                  - track-callback: TRACK_CALLBACK_ANIMATION_START
+                    track-callback-keyframe: 30
+                    track-callback-target-name: ani_chips_to_field
+                    track-callback-target-type: TRACK_TARGET_ANIMATION
+
+              - name: ani_chips_to_field
+                animation-fps: 30
+                animation-loop: 0
+                tracks:
+                  - track-set-value: ${grp_el} POSITION_X 0 bet_key_positions_circle:$x_array
+                  - track-set-value: ${grp_el} POSITION_Y 0 bet_key_positions_circle:$y_array
+
+              - name: chip_losing_animation
+                animation-fps: 60
+                animation-loop: 0
+                animation-delay: 120
+                tracks:
+                  - track-easing: image_overlay POSITION_Y EASE_IN_QUINT BEGIN_TO_END 0 150 25 0
+                  - track-easing: image_overlay ALPHA LINEAR BEGIN_TO_END 1 0 15 10
+                  - track-easing: rectangle POSITION_Y EASE_IN_QUINT BEGIN_TO_END 0 150 25 0
+                  - track-easing: rectangle ALPHA LINEAR BEGIN_TO_END 1 0 15 10
+                  - track-set-value: ${value_el}_copy HIDDEN 0 0
+                  - track-set-value: image_overlay POSITION_Y 25 0
+                  - track-set-value: image_overlay ALPHA 25 1
+                  - track-set-value: image_overlay HIDDEN 25 1
+                  - track-set-value: rectangle POSITION_Y 25 -2
+                  - track-set-value: rectangle ALPHA 25 1
+                  - track-set-value: rectangle HIDDEN 25 1
+                  - track-set-value: ${value_el}_copy HIDDEN 25 1
+
+              - name: chip_update_values
+                animation-fps: 60
+                animation-loop: 0
+                animation-delay: 0
+                tracks:
+                  - track-set-value: ${value_el}_copy HIDDEN 5 0
+                  - track-callback: TRACK_CALLBACK_TEXT_ATTRIBUTE_UPDATE
+                    track-callback-keyframe: 0
+                    track-callback-target-name: ${value_el}_copy
+                    track-callback-target-type: TRACK_TARGET_TEXT_ATTRIBUTE
+                  - track-callback: TRACK_CALLBACK_STATE_LINK_ENABLE_ONCE
+                    track-callback-keyframe: 0
+                    track-callback-target-name: text_height
+                    track-callback-target-type: TRACK_TARGET_STATE_LINK
+                  - track-callback: TRACK_CALLBACK_STATE_LINK_ENABLE_ONCE
+                    track-callback-keyframe: 0
+                    track-callback-target-name: text_width
+                    track-callback-target-type: TRACK_TARGET_STATE_LINK
+            children:
+              - type: line
+                name: line_glow
+                transform:
+                  anchor: ANCHOR_MIDDLE_CENTER
+                  alignment: ALIGNMENT_MIDDLE_CENTER
+                  position: [0, 0]
+                  alpha: 0
+                  z-index: 0
+                line-color: "#fff"
+                line-width: 30
+                line-feather: 8
+                line-feather-color: "#fff"
+                circle-points: 100
+                circle-radius: 200
+              - name: rectangle
+                type: rectangle
+                #touchable: false
+                hidden: true
+                transform:
+                  anchor: ANCHOR_MIDDLE_CENTER
+                  alignment: ALIGNMENT_MIDDLE_CENTER
+                  position: [0, -2]
+                  z-index: 3
+                # rectangle width and height
+                rectangle-width: 300
+                rectangle-height: 80
+                # rectangle color when no gradient colors provided
+                rectangle-color: "#fff"
+                rectangle-border-color: "#F00"
+                rectangle-border-width: 7
+                # gradient offset
+                rectangle-gradient-offset: 0
+                rectangle-smooth-edge: false
+                rectangle-corner-radious: 0.3
+                tags:
+                  - chip_tag_$key
+              - name: image_overlay
+                type: image
+                atlas: global
+                src: split_chip/split_chip.png
+                src-root: assets/images/
+                # image-color-animation: true
+                tags:
+                  - chip_tag_$key #tag mora ostati tak kot je tu!!!  stevilka je dependant od state arraya
+                # IMPORTANT! color on image must be defined
+                # otherwise parent color is used which has
+                # color with alpha 0
+                # color: "#b08d5700"
+                transform:
+                  anchor: ANCHOR_MIDDLE_CENTER
+                  alignment: ALIGNMENT_MIDDLE_CENTER
+                  position: [0, 0]
+                  alpha: 0
+                  z-index: 1
+                state-links:
+                  - name: text_width
+                    state-link-description: "text_size"
+                    state-target-property: TARGET_ENTITY_WIDTH
+                    state-source-property: SOURCE_ENTITY_WIDTH
+                    state-source-entity-name: ${value_el}
+                    state-target-entity-name: ${value_el}_copy
+                    state-link-initial-state: DISABLED
+                    state-transform-type: TRANSFORM_LINEAR_PARAMS
+                    state-transform-params: [1, 0]
+                  - name: text_height
+                    state-link-description: "text_size"
+                    state-target-property: TARGET_ENTITY_HEIGHT
+                    state-source-property: SOURCE_ENTITY_HEIGHT
+                    state-source-entity-name: ${value_el}
+                    state-target-entity-name: ${value_el}_copy
+                    state-link-initial-state: DISABLED
+                    state-transform-type: TRANSFORM_LINEAR_PARAMS
+                    state-transform-params: [1, 0]
+                children:
+                  - name: image_chip
+                    type: image
+                    atlas: global
+                    src: split_chip/split_chip.png
+                    src-root: assets/images/
+                    # image-color-animation: true
+                    # color: "#b08d5700"
+                    transform:
+                      anchor: ANCHOR_MIDDLE_CENTER
+                      alignment: ALIGNMENT_MIDDLE_CENTER
+                      position: [0, 0]
+                      z-index: 2
+
+                  - name: ${value_el}_copy
+                    type: text
+                    transform:
+                      anchor: ANCHOR_MIDDLE_CENTER
+                      alignment: ALIGNMENT_MIDDLE_CENTER
+                      position: [0, 0]
+                      #scale: [0.7,0.7,1]
+                      z-index: 4
+                    text: "<{0}"
+                    text-size: 3.5
+                    text-font: roboto-condensed
+                    text-color: "#fdd8c5"
+                    text-soften: 0.10
+                    hidden: true
+                    text-font-keep-default: true
+                    text-max-width: 300
+                    text-max-height: 20
+                    text-overflow: TEXT_OVERFLOW_SCALE
+                    text-alignment-horizontal: TEXT_ALIGNMENT_HORIZONTAL_CENTER
+                    text-alignment-vertical: TEXT_ALIGNMENT_VERTICAL_MIDDLE
+                    #text-max-size: 4
+                    text-min-size: 1
+                    text-translation:
+                      term: common.less_than
+                      term-attributes:
+                        - index: 0
+                          property: split_chip_key_min_value
+                          property-index: 0
+                          format: FORMAT_CURRENCY
+                          format-text-min-width: 1
+                          format-text-align: ALIGN_CENTER
+                          format-text-fill: FILL_SPACE
+                          update-on-change: false
+                          format-currency-specification: table
+
+                    # state-links:
+                    #   - name: state_link_alpha
+                    #     state-link-description: "alpha link for credits transparency"
+                    #     state-state-machine-source-property-name: fade_level
+                    #     state-source-property: SOURCE_STATEMACHINE_PROPERTY_FLOAT
+                    #     state-target-entity-name: ${value_el}_copy
+                    #     state-target-property: TARGET_ENTITY_ALPHA
+                    #     state-link-initial-state: ENABLED
+
+                    stateful-transitions:
+                      - condition: game_status == 0
+                        update-on-start: true
+                        scenario-in: hide_value
+                    animations:
+                      - name: hide_value
+                        animation-fps: 30
+                        animation-loop: 0
+                        tracks:
+                          - track-set-value: ${value_el}_copy HIDDEN      0      1
+
+                  - name: ${value_el}
+                    type: text
+                    transform:
+                      anchor: ANCHOR_MIDDLE_CENTER
+                      alignment: ALIGNMENT_MIDDLE_CENTER
+                      position: [0, 0]
+                      #scale: [0.7,0.7,1]
+                      z-index: 5
+                    text: "<{0}"
+                    text-size: 3.5
+                    text-font: roboto-condensed
+                    text-color: "#fdd8c5"
+                    text-soften: 0.10
+                    text-font-keep-default: true
+                    tags:
+                      - chip_tag_$key
+                    hidden: true
+                    # text-max-width: 300
+                    # text-max-height: 300
+                    text-overflow: TEXT_OVERFLOW_SCALE
+                    text-alignment-horizontal: TEXT_ALIGNMENT_HORIZONTAL_CENTER
+                    text-alignment-vertical: TEXT_ALIGNMENT_VERTICAL_MIDDLE
+                    #text-max-size: 4
+                    text-min-size: 0.5
+                    text-translation:
+                      term: common.less_than
+                      term-attributes:
+                        - index: 0
+                          property: split_chip_key_min_value
+                          property-index: 0
+                          format: FORMAT_CURRENCY
+                          format-text-min-width: 1
+                          format-text-align: ALIGN_CENTER
+                          format-text-fill: FILL_SPACE
+                          update-on-change: true
+                          format-currency-specification: table
+                    stateful-transitions:
+                      - condition: split_chip_key_sum_value[${key}] == 0
+                        update-on-start: true
+                        scenario-in: show_value
+                        scenario-out: hide_value
+
+                    # state-links:
+                    #   - name: state_link_alpha
+                    #     state-link-description: "alpha link for credits transparency"
+                    #     state-state-machine-source-property-name: fade_level
+                    #     state-source-property: SOURCE_STATEMACHINE_PROPERTY_FLOAT
+                    #     state-target-entity-name: ${value_el}
+                    #     state-target-property: TARGET_ENTITY_ALPHA
+                    #     state-link-initial-state: ENABLED
+                    animations:
+                      - name: show_value
+                        animation-fps: 30
+                        animation-loop: 0
+                        tracks:
+                          - track-set-value: ${value_el}  HIDDEN 0 0
+
+                      - name: hide_value
+                        animation-fps: 30
+                        animation-loop: 0
+                        tracks:
+                          - track-set-value: ${value_el} HIDDEN 0 1
+
+                  - name: ${value_el}_copy
+                    type: text
+                    transform:
+                      anchor: ANCHOR_MIDDLE_CENTER
+                      alignment: ALIGNMENT_MIDDLE_CENTER
+                      position: [0, 0]
+                      #scale: [0.7,0.7,1]
+                      z-index: 4
+                    text: "{0}"
+                    text-size: 3.5
+                    text-font: roboto-condensed
+                    text-color: "#fdd8c5"
+                    text-soften: 0.10
+                    hidden: true
+                    text-font-keep-default: true
+                    text-max-width: 300
+                    text-max-height: 20
+                    text-overflow: TEXT_OVERFLOW_SCALE
+                    text-alignment-horizontal: TEXT_ALIGNMENT_HORIZONTAL_CENTER
+                    text-alignment-vertical: TEXT_ALIGNMENT_VERTICAL_MIDDLE
+                    #text-max-size: 4
+                    text-min-size: 1
+                    text-translation:
+                      term: common.placeholder
+                      term-attributes:
+                        - index: 0
+                          property: split_chip_key_sum_value
+                          property-index: $key
+                          format: FORMAT_CURRENCY
+                          format-text-min-width: 1
+                          format-text-align: ALIGN_CENTER
+                          format-text-fill: FILL_SPACE
+                          update-on-change: false
+                          format-currency-specification: table
+
+                    # state-links:
+                    #   - name: state_link_alpha
+                    #     state-link-description: "alpha link for credits transparency"
+                    #     state-state-machine-source-property-name: fade_level
+                    #     state-source-property: SOURCE_STATEMACHINE_PROPERTY_FLOAT
+                    #     state-target-entity-name: ${value_el}_copy
+                    #     state-target-property: TARGET_ENTITY_ALPHA
+                    #     state-link-initial-state: ENABLED
+
+                    stateful-transitions:
+                      - condition: game_status == 0
+                        update-on-start: true
+                        scenario-in: hide_value
+                    animations:
+                      - name: hide_value
+                        animation-fps: 30
+                        animation-loop: 0
+                        tracks:
+                          - track-set-value: ${value_el}_copy HIDDEN      0      1
+
+                  - name: ${value_el}
+                    type: text
+                    transform:
+                      anchor: ANCHOR_MIDDLE_CENTER
+                      alignment: ALIGNMENT_MIDDLE_CENTER
+                      position: [0, 0]
+                      #scale: [0.7,0.7,1]
+                      z-index: 5
+                    text: "{0}"
+                    text-size: 3.5
+                    text-font-keep-default: true
+                    text-font: roboto-condensed
+                    text-color: "#fdd8c5"
+                    text-soften: 0.10
+                    tags:
+                      - chip_tag_$key
+                    hidden: true
+                    # text-max-width: 300
+                    # text-max-height: 300
+                    text-overflow: TEXT_OVERFLOW_SCALE
+                    text-alignment-horizontal: TEXT_ALIGNMENT_HORIZONTAL_CENTER
+                    text-alignment-vertical: TEXT_ALIGNMENT_VERTICAL_MIDDLE
+                    #text-max-size: 4
+                    text-min-size: 0.5
+                    text-translation:
+                      term: common.placeholder
+                      term-attributes:
+                        - index: 0
+                          property: split_chip_key_sum_value
+                          property-index: $key
+                          format: FORMAT_CURRENCY
+                          format-text-min-width: 1
+                          format-text-align: ALIGN_CENTER
+                          format-text-fill: FILL_SPACE
+                          update-on-change: true
+                          format-currency-specification: table
+                    stateful-transitions:
+                      - condition: split_chip_key_sum_value[${key}] > 0
+                        update-on-start: true
+                        scenario-in: show_value
+                        scenario-out: hide_value
+
+                    # state-links:
+                    #   - name: state_link_alpha
+                    #     state-link-description: "alpha link for credits transparency"
+                    #     state-state-machine-source-property-name: fade_level
+                    #     state-source-property: SOURCE_STATEMACHINE_PROPERTY_FLOAT
+                    #     state-target-entity-name: ${value_el}
+                    #     state-target-property: TARGET_ENTITY_ALPHA
+                    #     state-link-initial-state: ENABLED
+                    animations:
+                      - name: show_value
+                        animation-fps: 30
+                        animation-loop: 0
+                        tracks:
+                          - track-set-value: ${value_el}  HIDDEN 0 0
+
+                      - name: hide_value
+                        animation-fps: 30
+                        animation-loop: 0
+                        tracks:
+                          - track-set-value: ${value_el} HIDDEN 0 1
+    #- !include: _jackpot_marker_circle.yaml
