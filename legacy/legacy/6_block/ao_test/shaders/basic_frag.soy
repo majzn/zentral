@@ -1,0 +1,399 @@
+#version 330 core
+out vec4 fragColor;
+in vec3 outPos;
+in vec3 outCol;
+in vec2 outCoords;
+
+uniform int state;
+uniform int forcefield;
+uniform float playerX;
+uniform float playerY;
+uniform float playerZ;
+uniform float playerPan;
+uniform float playerPitch;
+uniform float playerTime;
+
+uniform float roomLeft;
+uniform float roomRight;
+uniform float roomFront;
+uniform float roomBack;
+uniform float roomTop;
+uniform float roomBot;
+
+uniform sampler2D framebuffer;
+uniform sampler2D noisemap;
+
+#define MAX_MARCH 100
+#define MAX_DIST 100.0
+#define HIT_DIST 0.00001
+#define RES_X 1080.0
+#define RES_Y 720.0
+
+vec2 res = vec2(1080.0, 720.0);
+
+vec2 Union(vec2 d1, vec2 d2) {
+  float d = min(d1.x, d2.x);
+  return vec2(d, d1.x < d2.x ? d1.y : d2.y);
+}
+
+vec2 SmoothUnion(vec2 d1, vec2 d2, float k ) {
+  float h = clamp(0.5 + 0.5*(d2.x-d1.x)/k, 0.0, 1.0);
+  return vec2(
+    mix(d2.x, d1.x, h) - k*h*(1.0-h),
+    d1.x < d2.x ? d1.y : d2.y);
+}
+
+vec2 SmoothSubtract(vec2 d1, vec2 d2, float k ) {
+  float h = clamp(0.5 - 0.5*(d2.x+d1.x)/k, 0.0, 1.0);
+  return vec2(
+    mix(d2.x, -d1.x, h) + k*h*(1.0-h),
+    d1.x < d2.x ? d1.y : d2.y);
+}
+
+vec2 SmoothIntersect(vec2 d1, vec2 d2, float k) {
+  float h = clamp(0.5 - 0.5*(d2.x-d1.x)/k, 0.0, 1.0 );
+  return vec2(
+    mix(d2.x, d1.x, h) + k*h*(1.0-h),
+    d1.x < d2.x ? d1.y : d2.y);
+}
+
+mat3 rotateX(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(vec3(1, 0, 0), vec3(0, c, -s), vec3(0, s, c));
+}
+
+mat3 rotateY(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(vec3(c, 0, s), vec3(0, 1, 0), vec3(-s, 0, c));
+}
+
+mat3 rotateZ(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(vec3(c, -s, 0), vec3(s, c, 0), vec3(0, 0, 1));
+}
+
+float PHI = 1.61803398874989484820459;
+
+float Hash(vec2 p) {
+  p = floor(p);
+  p = 50.0*fract(p*0.3183099 + vec2(0.71,0.113));
+  return -1.0+2.0*fract( p.x*p.y*(p.x+p.y) );
+}
+
+float Noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
+  return mix(
+          mix(Hash(i + vec2(0.0,0.0)), Hash(i + vec2(1.0,0.0)), u.x),
+            mix(Hash(i + vec2(0.0,1.0)), Hash(i + vec2(1.0,1.0)), u.x), u.y);
+}
+
+float FractalNoise(vec2 uv) {
+  float f = 0.0;
+  float scale = 0.5;
+  int iter = 8;
+  mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
+  for(int i = 0; i < iter; i++) {
+    f += scale*Noise(uv);
+    uv = m*uv;
+    scale *= 0.5;
+  }
+  return f*20.0;
+}
+
+float DomainWarp(vec2 uv, vec2 d, vec2 warp) {
+  vec2 dw = vec2(FractalNoise(uv), FractalNoise(uv + d));
+  float ret = (FractalNoise(uv + warp*dw));  
+  return ret;
+}
+
+vec2 Sphere(vec3 p, float r, float mat) {
+  return vec2(length(p) - r, mat);
+}
+
+vec2 Plane(vec3 p, vec3 n, float h, float mat) {
+  return vec2(dot(p, n) + h, mat);
+}
+
+vec2 Box(vec3 p, vec3 b, float mat) {
+    vec3 d = abs(p) - b;
+    return vec2(min(max(d.x,max(d.y,d.z)),0.0) + length(max(d,0.0)), mat);
+}
+
+vec2 RoundBox(vec3 p, vec3 b, float r, float mat) {
+  vec3 q = abs(p) - b;
+  return vec2(length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r, mat);
+}
+
+vec2 RoundCylinder(vec3 p, float ra, float rb, float h, float mat) {
+  vec2 d = vec2( length(p.xz)-2.0*ra+rb, abs(p.y) - h );
+  return vec2(min(max(d.x,d.y),0.0) + length(max(d,0.0)) - rb, mat);
+}
+
+#define MAT_WALL 0.0
+#define MAT_DOOR 1.0
+#define MAT_BED 2.0
+#define MAT_SHEET 3.0
+#define MAT_PILLOW 4.0
+#define MAT_WINDOW 5.0
+#define MAT_HANDLE 6.0
+#define MAT_LIGHT_FIXTURE 7.0
+#define MAT_LIGHT 8.0
+
+vec2 Scene(vec3 p) {
+  float pi = 3.14*2;
+  vec2 dist;
+  vec2 door;
+  vec2 bed;
+  float panelAmt = 16.0;
+  float panels = panelAmt/2.0;
+  float pad = 0.0;
+  vec2 sheet;
+  vec2 pillow;
+  float rise = 0.0;
+  float rc = 0.0;
+  vec2 light;
+  float noise;
+  float blend = min(10.0, max(1.0, (playerZ + 10.0)*0.01));
+  float warpAmt = min((playerZ + 10.0)*0.01, 1.0);
+  float warpY = sin(playerTime + p.z*0.1 - playerZ*0.1)*warpAmt;
+  float warpX = cos(playerTime + p.z*0.1 - playerZ*0.1)*warpAmt;
+  float warpZ = -sin(playerTime + p.z*0.1 - playerZ*0.1)*warpAmt;
+   
+  noise = DomainWarp(p.xz*0.01, vec2(0.2, 0.5), vec2(0.4, 0.2))*
+    min(max(((playerZ + 10.0)*0.001), 0.0), 0.2);
+  p.y += warpY*noise;
+  p.x += warpX;
+  p.z += warpZ;
+
+
+  vec3 wp1 = vec3(0.0, roomBot, 0.0);
+  vec3 wp2 = vec3(roomRight, 0.0, 0.0);
+  vec3 wp3 = vec3(0.0, 0.0, roomBack);
+
+  vec3 wo1 = vec3(0.0, 1.0, 0.0);
+  vec3 wo2 = vec3(0.0, -1.0, 0.0);
+  vec3 wo3 = vec3(1.0, 0.0, 0.0);
+  vec3 wo4 = vec3(0.0, 0.0, 1.0);
+  vec3 wo5 = vec3(-1.0, 0.0, 0.0);
+  vec3 wo6 = vec3(0.0, 0.0, -1.0);
+  
+  // walls
+  dist = Plane(p, wo1, roomTop, MAT_WALL);
+  dist = SmoothUnion(dist, Plane(p - wp1, wo2, 0.0, MAT_WALL), blend);
+  dist = SmoothUnion(dist, Plane(p, wo3, roomLeft, MAT_WALL), blend);
+  dist = SmoothUnion(dist, Plane(p, wo4, roomFront, MAT_WALL), blend);
+  dist = SmoothUnion(dist, Plane(p - wp2, wo5, 0.0, MAT_WALL), blend);
+  dist = SmoothUnion(dist, Plane(p - wp3, wo6, 0.0, MAT_WALL), blend);
+  
+  // padded cell pattern
+  pad = min(
+    min((cos(p.y/10.0*pi*panels) + 0.6)*0.1,
+    min((cos(p.x/10.0*pi*panels) + 0.6)*0.1,
+    ((cos(p.z/10.0*pi*panels) + 0.6)*0.1))), 0.0);
+  dist.x -= pad;
+
+  // bed
+  bed = 
+    RoundBox(p - vec3(0.0, -9.4, -5.0), vec3(8.0, 0.5, 4.0), 0.5, MAT_BED);
+ 
+  rc = p.z + 5.0;
+  if(rc < -pi) { rc = -pi; }
+  if(rc > pi) { rc = pi; }
+  rise = sin((rc*0.6) + pi*0.25);
+
+  pillow = RoundBox(p - vec3(6.5, -8.5, -5.0),
+    vec3(0.6, rise*0.4, 2.5), 0.6, MAT_PILLOW);
+  sheet = RoundBox(p - vec3(-2.0, -9.0, -5.0),
+    vec3(6.0, 0.3, 4.0), 0.7, MAT_SHEET);
+
+  sheet.x += sin(p.x*1.0)*0.1;
+  sheet.x += cos(p.z*1.0)*0.1;
+  
+  bed = Union(bed, sheet);
+  bed = Union(bed, pillow);
+  
+  // door
+  
+  door = RoundBox(p - vec3(0.0, -1.0, 0.8 + roomBack),
+    vec3(4.2, 8.0, 1.0), 0.1, MAT_DOOR);
+  
+  light = 
+    RoundCylinder(p - vec3(0.0, 10.25, 0.0),
+      1.0, 0.1, 0.5, MAT_LIGHT_FIXTURE);
+  
+  light = 
+    Union(light, RoundCylinder(p - vec3(0.0, 10.0, 0.0),
+      0.8, 0.02, 0.5, MAT_LIGHT_FIXTURE));
+  
+  light = 
+    SmoothSubtract(
+      RoundCylinder(p - vec3(0.0, 9.5, 0.0),
+        0.7, 0.02, 0.5, MAT_LIGHT_FIXTURE), light, 0.1);
+  
+  light = Union(light, Sphere(p - vec3(0.0, 10.5, 0.0), 1.5,  MAT_LIGHT));
+
+  dist = Union(light, dist);
+  if(p.z < 200.0) {
+    dist = Union(door, dist);
+  }
+//  dist = Union(bed, dist);
+  if(p.z < 200) {
+    dist = SmoothSubtract(
+      RoundBox(p - vec3(0.0, -1.0, roomBack),
+        vec3(3.6, 7.2, 1.0), 0.1, MAT_DOOR), dist, 0.1);
+  
+    dist = SmoothUnion(RoundBox(p - vec3(0.0, -1.0, roomBack + 1.0),
+      vec3(3.2, 6.8, 0.1), 0.05, MAT_DOOR), dist, 0.05);
+    dist = SmoothSubtract(RoundBox(p - vec3(0.0, 3.0, roomBack + 1.0),
+      vec3(2.0, 1.5, 0.1), 0.1, MAT_DOOR), dist, 0.05);
+    dist = Union(dist,
+      Sphere(p - vec3(2.2, 0.0, roomBack + 0.5), 0.5,  MAT_HANDLE));
+  }
+  return dist;
+}
+
+vec2 GetDist(vec3 p) {
+  return Scene(p);
+}
+
+vec3 GetNormal2(vec3 p) {
+  float d = GetDist(p).x;
+  vec2 e = vec2(0.1, 0.0);
+  vec3 n = d - vec3(
+    GetDist(p - e.xyy).x,
+    GetDist(p - e.yxy).x,
+    GetDist(p - e.yyx).x);
+  return normalize(n);
+}
+
+vec3 GetNormal(vec3 p){
+  vec2 e = vec2(1.0,-1.0)*0.5773*0.0005;
+  return normalize(e.xyy*GetDist(p + e.xyy).x + 
+				    e.yyx*GetDist(p + e.yyx).x + 
+					e.yxy*GetDist(p + e.yxy).x + 
+					e.xxx*GetDist(p + e.xxx).x);
+}
+
+vec4 GetLight(vec3 p, vec3 col, vec3 pos) {
+  vec3 lightPos = pos;
+  vec3 l = normalize(lightPos - p);
+  vec3 n = GetNormal(p);
+  float dif = dot(n, l);
+  return vec4(dif*col, dif);
+}
+
+vec3 getRayDir(vec3 camDir, vec3 camUp, vec2 texCoord) {
+  vec3 camSide = normalize(cross(camDir, camUp));
+  vec2 p = 2.0* texCoord - 1.0;
+  p.x *= res.x / res.y;
+  return normalize(p.x * camSide + p.y * camUp + 1.0 * camDir);
+}
+
+vec2 RayMarch(vec3 rayOrig, vec3 rayDir) {
+  vec2 ds;
+  float dist = 0.0;
+  float depth = 0.0;
+  float delta = 0.0;
+  float mat = 0.0;
+  for(int i = 0; i < MAX_MARCH; i++) {
+    vec3 p = rayOrig + rayDir * depth;
+    ds = GetDist(p);
+    dist = ds.x;
+    if(dist < HIT_DIST) {
+      mat = ds.y;
+      break;
+    }
+    delta = min(abs(dist), 10.0);
+    depth += dist*0.5;
+    if(depth > MAX_DIST) {
+      mat = 0.0;
+      break;
+    }
+  }
+  return vec2(depth, mat);
+}
+
+float SoftShadow(vec3 ro, vec3 rd, float mint, float maxt, float k) {
+    float res = 1.0;
+    float ph = 1e20;
+    for(float t = mint; t < maxt;){
+        float h = GetDist(ro + rd*t).x;
+        if(h < 0.001) { return 0.0; }
+        float y = h*h/(2.0*ph);
+        float d = sqrt(h*h - y*y);
+        res = min( res, k*d / max(0.0, t - y));
+        ph = h;
+        t += h;
+    }
+    return res;
+}
+
+void main() {
+  float redout = (playerZ + 10.0)*0.0005;
+  float blackout = 1.0 - redout*0.9;
+  float timeSpeed = 0.1;
+  float time = playerTime * timeSpeed - 1.0;
+  float day = (cos(time)*0.5 + 0.5);
+  vec3 ambient = vec3((0.1 + redout)*blackout, 0.1*blackout, 0.1*blackout);
+  vec2 uv = outCoords - (0.5);
+  uv.x *= res.x / res.y;
+  vec3 lightPos = vec3(0.0, 8.0, 0.0);
+  //lightPos = vec3(playerX, playerY, playerZ);
+  vec3 rayOrig = vec3(playerX, playerY, playerZ);
+  vec3 rayDir = vec3(uv.x, uv.y, 0.8);
+  rayDir *= rotateX(playerPitch);
+  rayDir *= rotateY(playerPan);
+  vec2 march = RayMarch(rayOrig, rayDir);
+  vec3 p = rayOrig + rayDir * march.x;
+  vec2 texCoords = vec2(outCoords.x, outCoords.y*-1.0);
+  vec4 fb = texture(framebuffer, texCoords);
+  vec3 lightNor = normalize(lightPos);
+  vec4 light = GetLight(p, vec3(0.92, 0.98, 1.0), lightPos) 
+    + GetLight(p, vec3(0.4*blackout, 0.3*(blackout), 0.2*(blackout)),
+    vec3(playerX, playerY, playerZ)); 
+  
+  vec3 finalCol = vec3(1.0, 1.0, 1.0);
+  vec3 n = GetNormal(p);
+
+  if(march.y == MAT_WALL) { finalCol = vec3(0.98, 0.95, 0.9); }
+  else if(march.y == MAT_DOOR) { finalCol = vec3(0.84, 0.82, 0.8); }
+  else if(march.y == MAT_BED) { finalCol = vec3(1.0, 1.0, 1.0); }
+  else if(march.y == MAT_SHEET) { finalCol = vec3(0.3, 0.6, 0.7); }
+  else if(march.y == MAT_PILLOW) { finalCol = vec3(1.0, 1.0, 1.0); }
+  else if(march.y == MAT_LIGHT) { finalCol = vec3(1.0, 1.0, 1.0); }
+  else if(march.y == MAT_LIGHT_FIXTURE) { finalCol = vec3(0.45, 0.44, 0.48); }
+  else if(march.y == MAT_HANDLE) { finalCol = vec3(0.0, 0.6, 0.8); }
+  else if(march.y == MAT_WINDOW) { finalCol = vec3(0.3, 0.6, 0.9); }
+  
+#if 1
+  if(march.y != MAT_LIGHT) {
+    finalCol = (finalCol * light.xyz) + ambient*(1.0 - light.x);
+  }
+#endif
+
+#if 0
+  finalCol = mix(finalCol, ambient, (march.x/100.0));
+#endif
+  vec3 lpos = normalize(lightPos - p);
+#if 0
+  if(march.y != MAT_LIGHT) {
+    finalCol = mix(ambient, finalCol, SoftShadow(p, lpos, 0.08, 3.0, 8.0));
+  }
+#endif
+#if 1
+  finalCol = mix(finalCol, ambient, (march.x/MAX_DIST));
+#endif
+#if 0
+  if(p.x > -0.1 && p.x < 0.1) { finalCol = vec3(0.0); }
+  if(p.y > -0.1 && p.y < 0.1) { finalCol = vec3(0.0); }
+  if(p.z > -0.1 && p.z < 0.1) { finalCol = vec3(0.0); }
+#endif
+  finalCol += fb.xyz;
+  fragColor = vec4(finalCol, 1.0);
+};
+

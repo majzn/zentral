@@ -1,0 +1,17 @@
+<center> <h1 style="font-family: garamond; font-size: 200%; ">Downloads</h1> </center>
+<center>
+	
+	<div class="row2"><a class="dllink2" href="https://www.anmon.org/downloads/wss1.1_setup.exe">Windows Sneed Slideshow</a></div>
+	<div class="row"><a class="dllink" href="https://www.anmon.org/downloads/cyl_1.4.zip">CylQuest I (PC)</a></div>
+	<div class="row2"><a class="dllink2" href="https://www.anmon.org/downloads/cyl_1.4port.apk">CylQuest I (Android)</a></div>
+	<div class="row"><a class="dllink" href="https://www.anmon.org/downloads/Anmon_Benchmark_v0.5.exe">Official Anmon Benchmark [DENOUNCED]</a></div>
+	<div class="row2"><a class="dllink2" href="https://www.anmon.org/downloads/Ethnicity_Finder_v1.0.exe">Funtech Ethnicity Finder v1.0</a></div>
+	<div class="row"><a class="dllink" href="https://www.anmon.org/downloads/nnnamegenerator.exe">Funtech [redacted] Name Generator</a></div>
+	<div class="row2"><a class="dllink2" href="https://www.anmon.org/downloads/anmon_paint_0.17.zip">Anmon Paint</a></div>
+	<div class="row"><a class="dllink" href="https://www.anmon.org/downloads/banana.exe">banana</a></div>
+	<div class="row2"><a class="dllink2" href="https://www.anmon.org/downloads/APE_001.7z">A.P.E. OpenGL 3D Rendering Engine</a></div>
+	<div class="row"><a class="dllink" href="https://www.anmon.org/downloads/chienbot.zip">Nword Patrol Bot</a></div>
+	<div class="row2"><a class="dllink2" href="https://www.anmon.org/downloads/kirifat.mp3">kirifat.mp3</a></div>
+	</center>
+</body>
+</html>

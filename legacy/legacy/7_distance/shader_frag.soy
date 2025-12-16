@@ -1,0 +1,254 @@
+
+#version 330 core
+out vec4 fragColor;
+in vec3 outPos;
+in vec3 outCol;
+in vec2 outCoords;
+
+uniform int state;
+uniform int forcefield;
+uniform float playerX;
+uniform float playerY;
+uniform float playerZ;
+uniform float playerPan;
+uniform float playerPitch;
+uniform float playerTime;
+
+uniform sampler2D framebuffer;
+uniform sampler2D noisemap;
+
+#define MAX_MARCH 2000
+#define MAX_DIST 2000.0
+#define HIT_DIST 0.01
+#define RES_X 1080.0
+#define RES_Y 720.0
+
+vec2 res = vec2(1080.0, 720.0);
+
+float SmoothSubtract( float d1, float d2, float k ) {
+  float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
+  return mix( d2, -d1, h ) + k*h*(1.0-h);
+}
+
+vec4 Scene_Ocean(vec3 p) {
+  float m = 800.0;
+  float half = m*0.5;
+  vec4 s = vec4(
+    0.0,
+    0.0,
+    0.0,
+    200.0);
+  vec3 pm = vec3(
+    mod(p.x + half, m) - half,
+    p.y - half - sin(playerTime*0.001 + 4.33)*200.0 - 30.0 -
+      (sin(sin(3.14 + p.z*0.001 + playerTime*0.01))*0.5 + 0.5)*500.0 + 100.0, 
+    mod(p.z - half*0.25, m) - half);
+  float sphere = length(vec2(length(pm.xz)-s.w, pm.y))-s.w*0.4;
+  vec4 s2 = vec4(0.0, 0.0, 0.0, 300.0);
+  float sphere2 = length(p - s2.xyz)-s2.w;
+  float dist = SmoothSubtract(sphere2, sphere, 50.0);
+  return vec4(0.5, 0.5, 0.5, dist);
+}
+
+float SmoothUnion( float d1, float d2, float k ) {
+  float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
+  return mix( d2, d1, h ) - k*h*(1.0-h);
+}
+
+float SmoothIntersect( float d1, float d2, float k ) {
+  float h = clamp( 0.5 - 0.5*(d2-d1)/k, 0.0, 1.0 );
+  return mix( d2, d1, h ) + k*h*(1.0-h);
+}
+
+float PHI = 1.61803398874989484820459;
+
+float Hash(vec2 p) {
+  p = floor(p);
+  p = 50.0*fract( p*0.3183099 + vec2(0.71,0.113));
+  return -1.0+2.0*fract( p.x*p.y*(p.x+p.y) );
+}
+
+float Noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
+  return mix(
+          mix(Hash(i + vec2(0.0,0.0)), Hash(i + vec2(1.0,0.0)), u.x),
+            mix(Hash(i + vec2(0.0,1.0)), Hash(i + vec2(1.0,1.0)), u.x), u.y);
+}
+
+float FractalNoise(vec2 uv) {
+  float f = 0.0;
+  float scale = 0.5;
+  int iter = 10;
+  mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
+  for(int i = 0; i < iter; i++) {
+    f += scale*Noise(uv);
+    uv = m*uv;
+    scale *= 0.5;
+  }
+  return f*20.0;
+}
+
+float DomainWarp(vec2 uv, vec2 d, vec2 warp) {
+  vec2 dw = vec2(FractalNoise(uv), FractalNoise(uv + d));
+  float ret = (FractalNoise(uv + warp*dw));  
+  return ret;
+}
+
+vec3 difDay = vec3(0.8, 0.7, 0.65);
+vec3 difNight = vec3(0.4, 0.3, 0.4);
+
+vec4 Scene_Noise(vec3 p) {
+  float scale = 0.01;
+  vec2 seed = vec2(120.0, 240.0);
+  vec4 ocean;
+  float waves = sin(playerTime*0.05 + p.x*0.1)*0.2;
+  float plane = p.y + waves;
+  float timeRot = playerTime*0.2;
+  float timeFall = playerTime*0.01 - 3.14/4;
+  float r = DomainWarp((p.xz + seed)*scale, vec2(0.3, 0.7), vec2(0.02, 0.02));
+  vec4 s = vec4(0.0, 1.0, 4.0, 2.0);
+  vec4 s2 = vec4(0.0, 1.5, 4.0, 1.0);
+  vec4 s3 = vec4(sin(timeRot)*((sin(playerTime*0.5)*0.5 + 0.7)*1.5), 
+    1.8, 4.0 + cos(timeRot)*((sin(playerTime*0.5)*0.5 + 0.7)*1.5), 0.2);
+  vec4 s4 = vec4(0.0, (sin(timeFall)*0.05 + 0.5)*800.0 - 400.0, 500.0, 200.0);
+  vec4 s5 = vec4(playerX, playerY, playerZ, 50.0);
+  float sphere = length(p - s.xyz)-s.w;
+  float sphere2 = length(p - s2.xyz)-s2.w;
+  float sphere3 = length(p - s3.xyz)-s3.w;
+  float sphere4 = length(p - s4.xyz)-s4.w;
+  float sphere5 = length(p - s5.xyz)-s5.w;
+  r = SmoothSubtract(sphere, r, 0.5);
+  vec3 colLand = mix(vec3(1.0, 1.0, 1.0), difDay, 0.2);
+  vec3 colBeach = vec3(0.2, 0.4, 0.8);
+  vec3 colLandFinal = mix(colBeach, colLand, min(max(p.y*2.0, 0.0), 1.0));
+  
+  float dist =  min(p.y + r, SmoothUnion(sphere3, sphere2, 0.8));
+  ocean = Scene_Ocean(p);
+  dist = SmoothUnion(dist, sphere4, 300.0);
+  dist = SmoothUnion(dist, ocean.w, 300.0);
+  if(forcefield == 1) {
+    dist = SmoothSubtract(sphere5, dist, 50.0);
+  }
+  vec3 colOcean = difDay;
+  vec3 col = dist < plane ? colLandFinal : colOcean;
+  return vec4(col, min(dist, plane));
+}
+
+vec4 Scene_Basic(vec3 p) {
+  float m = 1.5;
+  float half = m*0.5;
+  vec4 s = vec4(0.0, 1.0, 4.0, 0.5);
+  float sphere = length(p - s.xyz)-s.w;
+  float plane = p.y;
+  float dist = min(sphere, plane);
+  return vec4(1.0, 1.0, 1.0, dist);
+}
+
+vec4 GetDist(vec3 p) {
+  vec3 cam = vec3(playerX, playerY, playerZ);
+  vec4 ret = vec4(0.0);
+  if(state == 0) {
+    ret = Scene_Noise(p);
+  } else if(state == 1) {
+    ret = Scene_Ocean(p);
+  } else if(state == 2) {
+    ret = Scene_Basic(p);
+  }
+  return ret;
+}
+
+vec3 GetNormal(vec3 p) {
+  float d = GetDist(p).w;
+  vec2 e = vec2(0.1, 0.0);
+  vec3 n = d - vec3(
+    GetDist(p - e.xyy).w,
+    GetDist(p - e.yxy).w,
+    GetDist(p - e.yyx).w);
+  return normalize(n);
+}
+
+vec4 GetLight(vec3 p, vec3 col, vec3 pos) {
+  vec3 lightPos = pos;
+  vec3 l = lightPos;
+  vec3 n = GetNormal(p);
+  float dif = dot(n, l);
+  return vec4(dif*col, dif);
+}
+
+vec3 getRayDir(vec3 camDir, vec3 camUp, vec2 texCoord) {
+  vec3 camSide = normalize(cross(camDir, camUp));
+  vec2 p = 2.0* texCoord - 1.0;
+  p.x *= res.x / res.y;
+  return normalize(p.x * camSide + p.y * camUp + 1.0 * camDir);
+}
+
+vec4 RayMarch(vec3 rayOrig, vec3 rayDir) {
+  float dist = 0.0;
+  vec4 dS;
+  for(int i = 0; i < MAX_MARCH; i++) {
+    vec3 p = rayOrig + rayDir * dist;
+    dS = GetDist(p);
+    dist += dS.w;
+    if(dist > MAX_DIST || dS.w < HIT_DIST) { break; }
+  }
+  return vec4(dS.x, dS.y, dS.z, dist);
+}
+
+mat3 rotateX(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(
+      vec3(1, 0, 0),
+      vec3(0, c, -s),
+      vec3(0, s, c)
+  );
+}
+
+mat3 rotateY(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(
+      vec3(c, 0, s),
+      vec3(0, 1, 0),
+      vec3(-s, 0, c)
+  );
+}
+
+mat3 rotateZ(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(
+      vec3(c, -s, 0),
+      vec3(s, c, 0),
+      vec3(0, 0, 1)
+  );
+}
+
+void main() {
+  float timeSpeed = 0.1;
+  float time = playerTime * timeSpeed - 1.0;
+  float day = (cos(time)*0.5 + 0.5);
+  vec3 diffuse = mix(difNight, difDay, day);
+  vec2 uv = outCoords - (0.5);
+  uv.x *= res.x / res.y;
+  vec3 rayOrig = vec3(playerX, playerY, playerZ);
+  vec3 rayDir = vec3(uv.x, uv.y, 1.0);
+  rayDir *= rotateX(playerPitch);
+  rayDir *= rotateY(playerPan);
+  vec4 march = RayMarch(rayOrig, rayDir);
+  vec3 p = rayOrig + rayDir * march.w;
+  vec2 texCoords = vec2(outCoords.x, outCoords.y*-1.0);
+  vec4 fb = texture(framebuffer, texCoords);
+  vec4 light = GetLight(p, vec3(1.0, 1.0, 1.0), vec3(sin(time), cos(time), 0.0));
+  vec3 finalCol = march.xyz;
+  finalCol = mix(diffuse, finalCol, light.x);
+  finalCol = mix(finalCol, diffuse, (march.w/MAX_DIST));
+  if(march.w > MAX_DIST) {
+    finalCol = diffuse;
+  }
+  finalCol += fb.xyz;
+  fragColor = vec4(finalCol, 1.0);
+};
+

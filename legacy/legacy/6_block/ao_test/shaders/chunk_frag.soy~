@@ -1,0 +1,36 @@
+#version 330 core
+out vec4 fragCol;
+in vec3 outPos;
+in vec3 outPosModel;
+in vec2 outUV;
+in vec4 outCol;
+
+uniform int debug;
+uniform float playerX;
+uniform float playerY;
+uniform float playerZ;
+
+
+bool Border(vec3 p, float t) {
+  float min = -0.5 + t;
+  float max = 0.5 - t;
+  bool bx = (p.x > max || p.x < min);
+  bool by = (p.y > max || p.y < min);
+  bool bz = (p.z > max || p.z < min);
+  return (bx && by || (bx && bz) || (by && bz)) ? true : false;
+}
+
+float ExpToLin(float x, float c, float s) {
+  return (pow(min(max(x,0.0),1.0),c)+max(x,1.0)*c-c)*s;
+}
+
+void main() {
+  vec3 playerPos = vec3(playerX, playerY, playerZ);
+  float dist = distance(outPosModel, playerPos);
+  if(Border(outPos, 0.02)) {
+    fragCol = vec4(1.0, 1.0, 1.0, ExpToLin(1.0 / dist, 0.8, 4.0));
+  } else {
+    discard;
+  }
+};
+

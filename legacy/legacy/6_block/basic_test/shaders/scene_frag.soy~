@@ -1,0 +1,103 @@
+#version 330 core
+out vec4 fragCol;
+
+in vec4 gl_FragCoord;
+
+in vec3 outModel;
+in vec3 outNormal;
+in vec3 outPos;
+in vec2 outUV;
+in vec4 outCol;
+in float outAO;
+flat in int outWater;
+flat in int selected;
+
+uniform int debug;
+uniform float playerX;
+uniform float playerY;
+uniform float playerZ;
+
+uniform float wFogAmt;
+uniform float wFogEnd;
+uniform float wFogStart;
+
+uniform vec3 wSunDir;
+uniform vec3 wSunColour;
+uniform float wSunAmt;
+
+uniform float wOcean;
+
+uniform vec3 wAmbient;
+uniform vec3 wBackground;
+
+uniform int chHighlight;
+
+vec3 Fog(float dist, vec3 inCol, vec3 col, float minDist, float maxDist) {
+  float factor = (maxDist - dist) / (maxDist - minDist);
+  factor = clamp(factor, 0.0, 1.0);
+  return mix(col, inCol, factor);
+}
+
+#define M1 1597334677U /* 1719413*929 */
+#define M2 3812015801U /* 140473*2467*11 */
+
+float NoiseHashFast(int x, int y) {
+  uint ux = uint(x);
+  uint uy = uint(y);
+  ux *= M1; 
+  uy *= M2;
+  return float((ux ^ uy) * M1) * (1.0/float(uint(0xffffffffU)));
+}
+
+float RemapNoiseTri(const float v){
+  return abs(fract(v+0.5)-0.5)+.25;
+}
+
+vec3 ValveScreenSpaceDither(vec2 fragCoord, float colorDepth) {
+    // creating the dither pattern
+    vec3 dither = vec3(dot(vec2(171.0, 231.0), fragCoord.xy));
+    // shifting r,g & b channels different angles to break the repetition and smooth even more
+	dither.rgb = fract(dither.rgb / vec3(103.0, 71.0, 97.0));
+    
+    //note: apply triangular pdf
+    dither.r = RemapNoiseTri(dither.r)*2.0-1.0;
+    dither.g = RemapNoiseTri(dither.g)*2.0-1.0;
+    dither.b = RemapNoiseTri(dither.b)*2.0-1.0;
+    return dither.rgb / colorDepth;
+}
+
+void main() {
+  bool playerUW = playerY + 0.5 < wOcean;
+  bool chunkUW = outPos.y + 0.5 < wOcean;
+  float fogEnd = playerUW ? 128.0 : wFogEnd;
+  vec3 waterCol = wBackground*0.8;
+  vec3 resultFinal;
+  vec2 uv = outUV;
+  vec3 playerPos = vec3(playerX, playerY, playerZ);
+  vec3 objCol = vec3(1.0, 1.0, 1.0);
+  vec3 norm = normalize(outNormal);
+  float diffuse = max(dot(norm, wSunDir), 0.1);
+  vec3 result = (wAmbient + diffuse * wSunColour) * objCol;
+  vec3 resultAO = mix(result, wAmbient, 1.0 - outAO);
+  float fogDist = distance(outPos, playerPos);
+  vec3 resultFog = Fog(fogDist, resultAO, wBackground, wFogStart, fogEnd);
+  float chunkDist = distance(outPos.xz, playerPos.xz)*0.003;
+  float cdq = chunkDist*chunkDist*chunkDist*chunkDist;
+  
+  resultFinal = mix(resultAO, resultFog, wFogAmt);
+  if(chHighlight == 1) {
+    resultFinal *= 2.0;
+  }
+  
+  if(outWater == 1) {
+    resultFinal = waterCol;
+  }
+
+  if(!playerUW) {
+    resultFinal = mix(resultFinal, vec3(0.0, 0.05, 0.14),
+      clamp(1.0 - pow(outPos.y/wOcean, 8.0), 0.0, 1.0));
+  }
+
+  fragCol = vec4(resultFinal, outCol.w);
+};
+

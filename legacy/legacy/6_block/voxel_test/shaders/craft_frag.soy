@@ -1,0 +1,24 @@
+#version 330 core
+out vec4 fragCol;
+in vec3 outPos;
+in vec3 outCol;
+in vec2 outCoords;
+
+uniform int state;
+uniform int forcefield;
+uniform float playerX;
+uniform float playerY;
+uniform float playerZ;
+uniform float playerPan;
+uniform float playerPitch;
+uniform float playerTime;
+
+uniform sampler2D framebuffer;
+uniform sampler2D noisemap;
+
+void main() {
+  vec3 finalCol = vec3(outCoords.x, outCoords.y, -outCoords.x);
+  finalCol += texture(framebuffer, outCoords * vec2(1.0, -1.0)).xyz;
+  fragCol = vec4(finalCol, 1.0);
+};
+

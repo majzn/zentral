@@ -1,0 +1,71 @@
+#version 330 core
+layout(location = 0) in uint inID;
+// layout(location = 0) in vec3 inPos;
+// layout(location = 1) in vec2 inUV;
+// layout(location = 2) in float inID;
+// layout(location = 2) in uint inID;
+
+out vec3 outModel;
+out vec3 outPos;
+out vec2 outUV;
+out vec4 outCol;
+flat out int selected;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+uniform vec3 chCol;
+
+const float CUBE[8*5] = float[8*5](
+  -0.5f, -0.5f, -0.5f, 0.0f, 0.0f,  /* left   bottom  back  0 */
+  -0.5f, 0.5f, -0.5f, 0.0f, 0.5f,   /* left   top     back  1 */
+  0.5f, -0.5f, -0.5f, 0.5f, 0.0f,   /* right  bottom  back  2 */
+  0.5f, 0.5f, -0.5f, 0.5f, 0.5f,    /* right  top     back  3 */
+  -0.5f, -0.5f, 0.5f, 0.0f, 0.0f,   /* left   bottom  front 4 */
+  -0.5f, 0.5f, 0.5f, 0.0f, 0.5f,    /* left   top     front 5 */
+  0.5f, -0.5f, 0.5f, 0.5f, 0.0f,    /* right  bottom  front 6 */
+  0.5f, 0.5f, 0.5f, 0.5f, 0.5f      /* right   top    front 7 */
+);
+
+void main() {
+  vec4 finalCol = vec4(chCol, 1.0);
+  float s = 1.0;
+#if 0
+  int id = int(inID);
+  int x = id & 0xFF;
+  int y = (id >> 8) & 0xFF;
+  int z = (id >> 16) & 0xFF;
+  int w = (id >> 24) & 0xFF;
+  if(w == 2) {
+    finalCol = vec4(0.0, 0.0, 1.0, 0.7)*finalCol;
+  }
+  if(w == 3) {
+    finalCol = vec4(1.0, 0.0, 0.0, 1.0)*finalCol;
+  }
+  if((w & 0x8) != 0) {
+    selected = 1;
+  } else {
+    selected = 0;
+  }
+  
+  mat4 instance = mat4(
+    vec4(s, 0.0, 0.0, 0.0),
+    vec4(0.0, s, 0.0, 0.0),
+    vec4(0.0, 0.0, s, 0.0),
+    vec4(x, z, y, 1.0));
+#endif
+  int i = int(inID);
+  int x = (i) & 0xF;
+  int y = (i >> 4) & 0xF;
+  int z = (i >> 8) & 0xF;
+  int v = (i >> 12) & 0xF;
+  int c = v*5;
+  vec4 pos = vec4(CUBE[c] + x, CUBE[c + 1] + z, CUBE[c + 2] + y, 1.0);
+  vec2 uv = vec2(CUBE[c + 3], CUBE[c + 4]);
+  outUV = uv;
+  outModel = (model*pos).xyz;
+  outPos = (pos).xyz;
+  outCol = finalCol; 
+  gl_Position = projection * view * model * pos;
+};
+

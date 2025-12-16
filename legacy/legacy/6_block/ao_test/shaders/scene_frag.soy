@@ -1,0 +1,84 @@
+#version 330 core
+out vec4 fragCol;
+
+in vec4 gl_FragCoord;
+
+in vec3 outModel;
+in vec3 outNormal;
+in vec3 outPos;
+in vec2 outUV;
+in vec4 outCol;
+in float outAO;
+flat in int selected;
+
+uniform int debug;
+uniform float playerX;
+uniform float playerY;
+uniform float playerZ;
+
+vec3 Fog(float dist, vec3 inCol, vec3 col, float minDist, float maxDist) {
+  float factor = (maxDist - dist) / (maxDist - minDist);
+  factor = clamp(factor, 0.0, 1.0);
+  return mix(col, inCol, factor);
+}
+
+#define M1 1597334677U /* 1719413*929 */
+#define M2 3812015801U /* 140473*2467*11 */
+
+float NoiseHashFast(int x, int y) {
+  uint ux = uint(x);
+  uint uy = uint(y);
+  ux *= M1; 
+  uy *= M2;
+  return float((ux ^ uy) * M1) * (1.0/float(uint(0xffffffffU)));
+}
+
+float RemapNoiseTri(const float v){
+  return abs(fract(v+0.5)-0.5)+.25;
+}
+
+vec3 ValveScreenSpaceDither(vec2 fragCoord, float colorDepth) {
+    // creating the dither pattern
+    vec3 dither = vec3(dot(vec2(171.0, 231.0), fragCoord.xy));
+    // shifting r,g & b channels different angles to break the repetition and smooth even more
+	dither.rgb = fract(dither.rgb / vec3(103.0, 71.0, 97.0));
+    
+    //note: apply triangular pdf
+    dither.r = RemapNoiseTri(dither.r)*2.0-1.0;
+    dither.g = RemapNoiseTri(dither.g)*2.0-1.0;
+    dither.b = RemapNoiseTri(dither.b)*2.0-1.0;
+    
+    return dither.rgb / colorDepth;
+}
+
+void main() {
+  vec2 uv = outUV;
+  vec3 playerPos = vec3(playerX, playerY, playerZ);
+  vec3 lightPos = vec3(0.0, 300.0, 0.0);
+  vec3 objCol = vec3(1.0, 1.0, 1.0);
+  vec3 norm = normalize(outNormal);
+  
+  // vec3 lightDir = normalize(lightPos - outModel);
+  vec3 lightDir = vec3(0.0, 0.7, 0.3);
+  float diff = max(dot(norm, lightDir), 0.1);
+  vec3 ambient = vec3(0.05, 0.15, 0.2);
+  vec3 background = vec3(0.03, 0.01, 0.04);
+  vec3 diffuse = diff*vec3(1.0, 1.0, 1.0);
+  vec3 result = (ambient + diffuse) * objCol;
+  float fogDist = distance(outModel, playerPos);
+  float chunkDist = distance(outModel.xz, playerPos.xz)*0.003;
+  float cdq = chunkDist*chunkDist*chunkDist*chunkDist*chunkDist*chunkDist;
+  vec3 fog = Fog(fogDist, result, ambient, -1.0, 4096.0);
+  float nx = gl_FragCoord.x + uv.x;
+  float ny = gl_FragCoord.y + uv.y;
+  
+  vec3 dither = ValveScreenSpaceDither(gl_FragCoord.xy, 1.0);
+
+  if(mix(0.0, 1.0, cdq + dither.x) > 0.5) {
+  }
+
+  result = fog;
+  result = mix(result, ambient, 1.0 - outAO);
+  fragCol = vec4(result, 1.0);
+};
+

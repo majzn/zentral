@@ -1,0 +1,11 @@
+#version 330 core
+  layout(location = 0) in vec3 inPos;
+  layout(location = 2) in vec2 inUV;
+  out vec3 outPos;
+  out vec2 outUV;
+void main() {
+  outUV = inUV * vec2(1.0, -1.0);
+  outPos = normalize(inPos);
+  gl_Position = vec4(inPos*2.0, 1.0);
+};
+

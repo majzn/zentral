@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In-Browser HTML/CSS Visual Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            color: #ccc;
+            background-color: #1e1e1e;
+        }
+        #main-container {
+            display: grid;
+            grid-template-rows: 32px 1fr;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #1e1e1e;
+        }
+        #content-area {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            overflow: hidden;
+        }
+        #preview-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #ffffff;
+            border-right: 1px solid #333;
+        }
+        #file-input {
+            display: none;
+        }
+        #top-bar {
+            background-color: #2d2d2d; 
+            border-bottom: 1px solid #444; 
+            padding: 0 5px;
+            height: 32px;
+        }
+        #top-bar h1 {
+            color: #f0f0f0;
+        }
+        #top-bar label, #top-bar button {
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 0; 
+            box-shadow: none; 
+            transition: background-color 0.1s;
+        }
+        #top-bar label {
+            background-color: #555;
+            color: white;
+            border: 1px solid #666;
+        }
+        #top-bar label:hover {
+            background-color: #666;
+        }
+        #top-bar button:hover {
+            opacity: 0.9;
+        }
+        #inspector-panel {
+            overflow-y: auto;
+            background-color: #1e1e1e; 
+            padding: 5px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .inspector-group {
+            margin-bottom: 8px;
+            padding: 4px;
+            background-color: #2d2d2d;
+            border: 1px solid #444;
+        }
+        .inspector-group h3 {
+            color: #ddd;
+            padding-bottom: 3px;
+        }
+        .inspector-group button {
+            border-radius: 2px;
+        }
+        #inspector-panel input, #inspector-panel select, #inspector-panel textarea {
+            padding: 2px;
+            font-size: 11px;
+            border-radius: 0;
+            border: 1px solid #444;
+            background-color: #3e3e3e;
+            color: #ddd;
+        }
+        #inspector-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 4px;
+            margin-bottom: 0;
+        }
+        .tab-button {
+            padding: 4px 6px;
+            border: 1px solid #444;
+            border-bottom: none;
+            background-color: #2d2d2d;
+            color: #ccc;
+            font-size: 10px;
+            margin-right: -1px;
+            flex-grow: 1;
+            flex-basis: auto;
+            min-width: fit-content;
+        }
+        .tab-button.active {
+            background-color: #1e1e1e;
+            border-bottom: 1px solid #1e1e1e;
+            color: #fff;
+        }
+        .tab-content {
+            display: none;
+            border: 1px solid #444;
+            padding: 8px;
+            background-color: #1e1e1e;
+            margin-top: -1px; 
+            color: #ccc;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        #inspector-panel select {
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23cccccc'%3e%3cpath d='M7 7l3 3 3-3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 1.5em;
+            padding-right: 2.5rem !important;
+            appearance: none;
+        }
+        .attribute-input {
+            width: 48%;
+        }
+        .hierarchy-item {
+            cursor: pointer;
+            padding: 2px 4px;
+            white-space: nowrap;
+            display: block;
+            margin: 1px 0;
+        }
+        .hierarchy-item:hover {
+            background-color: #3e3e3e;
+        }
+        .hierarchy-item.active-node {
+            background-color: #f59e0b;
+            color: #1e1e1e;
+            font-weight: bold;
+        }
+        .hierarchy-toggle {
+            display: inline-block;
+            width: 12px;
+            text-align: center;
+            margin-right: 2px;
+            user-select: none;
+            font-weight: bold;
+        }
+        .hierarchy-children {
+            padding-left: 15px;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            max-height: 500px;
+        }
+        .hierarchy-children.collapsed {
+            max-height: 0;
+        }
+        .class-toggle-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+            padding: 2px;
+            background-color: #3e3e3e;
+            border-radius: 2px;
+        }
+        .class-toggle-label {
+            flex-grow: 1;
+            font-family: monospace;
+            color: #a7f3d0;
+        }
+        .class-toggle-input {
+            width: 16px;
+            height: 16px;
+            margin-right: 4px;
+        }
+        #js-globals-content {
+            font-family: monospace;
+            font-size: 10px;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-sans antialiased">
+
+    <div id="main-container">
+        
+        <header id="top-bar" class="flex items-center justify-between z-10">
+            <h1 class="text-lg font-bold">HTML Inspector v3.6</h1>
+            
+            <div class="flex items-center space-x-1">
+                <label for="file-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 font-semibold border border-gray-500">
+                    📂 Load File
+                </label>
+                <input type="file" id="file-input" accept=".html">
+
+                <button id="save-button" disabled class="bg-blue-600 hover:bg-blue-700 text-white font-semibold border border-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                    ⬇️ Save & Download
+                </button>
+            </div>
+        </header>
+
+        <div id="content-area">
+            
+            <iframe id="preview-iframe" title="Live HTML Preview" class="flex-grow"></iframe>
+
+            <div id="inspector-panel">
+                <p class="text-xs text-gray-400 mb-1 mt-1">
+                    Selected: <span id="selected-element-tag" class="font-mono text-pink-400 font-bold">&lt;none&gt;</span>
+                </p>
+
+                <div class="inspector-group space-y-1">
+                    <h3 class="font-medium text-sm">Element Management</h3>
+                    
+                    <div class="space-y-0.5">
+                        <label for="new-element-type" class="block text-xs font-medium text-gray-400">Type to Add</label>
+                        <select id="new-element-type" class="w-full">
+                            <option value="div">DIV (Container)</option>
+                            <option value="p">P (Paragraph)</option>
+                            <option value="h2">H2 (Heading)</option>
+                            <option value="button">BUTTON</option>
+                            <option value="a">A (Link)</option>
+                            <option value="input">INPUT (Text)</option>
+                            <option value="img">IMG (Image)</option>
+                        </select>
+                    </div>
+
+                    <button id="add-element-button" disabled class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 py-0.5 disabled:opacity-50">
+                        + Add Child
+                    </button>
+                    
+                    <div class="flex space-x-1 mt-1">
+                        <button id="delete-element-button" disabled class="w-1/2 bg-red-600 hover:bg-red-700 text-white py-0.5 disabled:opacity-50">
+                            🗑️ Delete
+                        </button>
+                        <button id="duplicate-element-button" disabled class="w-1/2 bg-purple-600 hover:bg-purple-700 text-white py-0.5 disabled:opacity-50">
+                            📋 Duplicate
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-1 bg-gray-700 text-xs border border-gray-600 mb-2 mt-1" id="status-container">
+                    <p id="status-message" class="text-gray-300">Load a file to start editing.</p>
+                </div>
+                
+                <div id="inspector-tabs">
+                    <button class="tab-button active" data-tab="tab-content">Content</button>
+                    <button class="tab-button" data-tab="tab-layout">Layout</button>
+                    <button class="tab-button" data-tab="tab-spacing">Spacing</button>
+                    <button class="tab-button" data-tab="tab-styles">Styles</button>
+                    <button class="tab-button" data-tab="tab-attributes">Attributes</button>
+                    <button class="tab-button" data-tab="tab-hierarchy">Hierarchy</button>
+                    <button class="tab-button" data-tab="tab-profiler">Profiler</button>
+                    <button class="tab-button" data-tab="tab-js-globals">JS Globals</button>
+                </div>
+
+                <div id="tab-content-wrapper" class="pt-0">
+
+                    <div id="tab-content" class="tab-content active space-y-2">
+                        <div class="space-y-1">
+                            <label for="element-id" class="block text-xs font-medium text-gray-400">ID</label>
+                            <input type="text" id="element-id" placeholder="Optional ID" class="w-full">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="element-class" class="block text-xs font-medium text-gray-400">Classes (Tailwind)</label>
+                            <input type="text" id="element-class" placeholder="e.g., bg-red-500 p-4" class="w-full">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="element-content" class="block text-xs font-medium text-gray-400">Inner Content / Text</label>
+                            <textarea id="element-content" rows="4" placeholder="Edit the text or HTML content here." class="w-full"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div id="tab-layout" class="tab-content space-y-2">
+                        <div class="space-y-1">
+                            <label for="display-select" class="block text-xs font-medium text-gray-400">Display</label>
+                            <select id="display-select" class="w-full">
+                                <option value="">(Inherit/Initial)</option>
+                                <option value="block">block</option>
+                                <option value="inline-block">inline-block</option>
+                                <option value="flex">flex</option>
+                                <option value="grid">grid</option>
+                                <option value="inline-flex">inline-flex</option>
+                                <option value="none">none</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex space-x-1">
+                            <div class="space-y-1 w-1/2">
+                                <label for="width" class="block text-xs font-medium text-gray-400">Width</label>
+                                <input type="text" id="width" placeholder="100% / 300px" class="w-full">
+                            </div>
+                            <div class="space-y-1 w-1/2">
+                                <label for="height" class="block text-xs font-medium text-gray-400">Height</label>
+                                <input type="text" id="height" placeholder="auto / 200px" class="w-full">
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="flex-direction-select" class="block text-xs font-medium text-gray-400">Flex/Grid Layout</label>
+                            <select id="flex-direction-select" class="w-full">
+                                <option value="">(None)</option>
+                                <option value="row">Flex Row</option>
+                                <option value="column">Flex Column</option>
+                                <option value="row-reverse">Flex Row Reverse</option>
+                                <option value="column-reverse">Flex Column Reverse</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label for="justify-content-select" class="block text-xs font-medium text-gray-400">Justify Content</label>
+                            <select id="justify-content-select" class="w-full">
+                                <option value="">(None)</option>
+                                <option value="flex-start">flex-start</option>
+                                <option value="center">center</option>
+                                <option value="flex-end">flex-end</option>
+                                <option value="space-between">space-between</option>
+                                <option value="space-around">space-around</option>
+                                <option value="space-evenly">space-evenly</option>
+                            </select>
+                        </div>
+
+                        <div class="p-1 bg-gray-600 text-white text-xs">Grid Properties (if Display: grid)</div>
+                        <div class="space-y-1">
+                            <label for="grid-cols" class="block text-xs font-medium text-gray-400">Template Columns</label>
+                            <input type="text" id="grid-cols" placeholder="e.g., 1fr 2fr 1fr" class="w-full">
+                        </div>
+                         <div class="space-y-1">
+                            <label for="grid-gap" class="block text-xs font-medium text-gray-400">Gap</label>
+                            <input type="text" id="grid-gap" placeholder="e.g., 10px" class="w-full">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="align-items-select" class="block text-xs font-medium text-gray-400">Align Items</label>
+                            <select id="align-items-select" class="w-full">
+                                <option value="">(None)</option>
+                                <option value="start">start</option>
+                                <option value="center">center</option>
+                                <option value="end">end</option>
+                                <option value="stretch">stretch</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="box-sizing-select" class="block text-xs font-medium text-gray-400">Box Sizing</label>
+                            <select id="box-sizing-select" class="w-full">
+                                <option value="">(Inherit)</option>
+                                <option value="content-box">content-box</option>
+                                <option value="border-box">border-box</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="tab-spacing" class="tab-content space-y-2">
+                        <div class="space-y-1">
+                            <label for="padding" class="block text-xs font-medium text-gray-400">Padding</label>
+                            <input type="text" id="padding" placeholder="e.g., 5px 10px" class="w-full">
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="margin" class="block text-xs font-medium text-gray-400">Margin</label>
+                            <input type="text" id="margin" placeholder="e.g., 10px auto" class="w-full">
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <label for="border" class="block text-xs font-medium text-gray-400">Border</label>
+                            <input type="text" id="border" placeholder="e.g., 1px solid #777" class="w-full">
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="border-radius" class="block text-xs font-medium text-gray-400">Border Radius</label>
+                            <input type="text" id="border-radius" placeholder="e.g., 8px or 50%" class="w-full">
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="box-shadow" class="block text-xs font-medium text-gray-400">Box Shadow</label>
+                            <input type="text" id="box-shadow" placeholder="e.g., 0 4px 6px rgba(0,0,0,0.5)" class="w-full">
+                        </div>
+                    </div>
+
+                    <div id="tab-styles" class="tab-content space-y-3">
+                        <div class="p-1 bg-gray-600 text-white font-semibold text-xs">Define New Class</div>
+                        <div class="space-y-1">
+                            <label for="new-class-name" class="block text-xs font-medium text-gray-400">Class Name (e.g., .card-primary)</label>
+                            <input type="text" id="new-class-name" placeholder=".my-custom-style" class="w-full">
+                        </div>
+                        <div class="space-y-1">
+                            <label for="new-class-definition" class="block text-xs font-medium text-gray-400">CSS Rules (e.g., background: #1a1a1a; padding: 10px;)</label>
+                            <textarea id="new-class-definition" rows="3" placeholder="color: white; border: 1px solid #444;" class="w-full"></textarea>
+                        </div>
+                        <button id="add-class-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-0.5">
+                            Add/Update Class Definition
+                        </button>
+                        
+                        <div class="p-1 bg-gray-600 text-white font-semibold text-xs mt-3">Defined Classes (Toggle)</div>
+                        <div id="defined-class-list" class="space-y-1 text-xs">
+                            <p class="text-gray-500">No custom classes defined yet.</p>
+                        </div>
+                    </div>
+
+                    <div id="tab-attributes" class="tab-content space-y-2">
+                        <div id="attribute-list" class="space-y-2">
+                            <p class="text-xs text-gray-500">No element selected or element is root.</p>
+                        </div>
+                        <div class="p-1 bg-gray-700 text-white font-semibold text-xs">Add New Attribute</div>
+                        <div class="flex justify-between space-x-1">
+                            <input type="text" id="new-attr-key" placeholder="key (e.g., data-key)" class="attribute-input">
+                            <input type="text" id="new-attr-value" placeholder="value" class="attribute-input">
+                        </div>
+                        <button id="add-attribute-button" disabled class="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-0.5 disabled:opacity-50">
+                            + Add Attribute
+                        </button>
+                    </div>
+
+                    <div id="tab-hierarchy" class="tab-content space-y-2">
+                        <div class="p-1 bg-gray-700 text-white font-semibold text-xs">DOM Tree View</div>
+                        <div id="hierarchy-panel" class="text-xs font-mono">
+                            <p class="text-gray-500">Load a file to view the DOM structure.</p>
+                        </div>
+                    </div>
+
+                    <div id="tab-profiler" class="tab-content space-y-2">
+                        <div class="p-1 bg-gray-700 text-white font-semibold text-xs">DOM Structure Metrics</div>
+                        <div id="profiler-stats" class="space-y-1 text-xs">
+                            <p>Total Elements: <span id="stat-element-count" class="font-bold text-yellow-300">0</span></p>
+                            <p>Max Nesting Depth: <span id="stat-max-depth" class="font-bold text-yellow-300">0</span></p>
+                            <p>Avg Element Depth: <span id="stat-avg-depth" class="font-bold text-yellow-300">0</span></p>
+                        </div>
+                        
+                        <div class="p-1 bg-gray-700 text-white font-semibold text-xs">Optimization & Style Analysis</div>
+                        <div id="profiler-analysis" class="space-y-1 text-xs">
+                            <p>Inline Style Count: <span id="stat-inline-styles" class="font-bold text-red-400">0</span></p>
+                            <p>Bloated Elements (>5 Attrs): <span id="stat-bloated-count" class="font-bold text-yellow-300">0</span></p>
+                        </div>
+
+                        <div class="p-1 bg-gray-700 text-white font-semibold text-xs">Tag Distribution</div>
+                        <ul id="tag-distribution" class="list-none space-y-0.5 ml-0 text-xs pl-2">
+                            <li class="text-gray-400">Load a file to analyze...</li>
+                        </ul>
+                    </div>
+                    
+                    <div id="tab-js-globals" class="tab-content space-y-2">
+                        <div class="p-1 bg-gray-700 text-white font-semibold text-xs">Global JavaScript (Scripts consolidated upon save)</div>
+                        <textarea id="js-globals-content" rows="10" placeholder="// All inline JS will be consolidated here upon load.\n// Add your global variables or functions here..." class="w-full font-mono text-xs"></textarea>
+                        <p class="text-xs text-gray-400">Note: All inline &lt;script&gt; tags (without `src`) from the loaded file are merged here. The merged code is saved into a single &lt;script id="designer-js-globals"&gt; tag in the output file.</p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script id="designer-main-script">
+        const fileInput = document.getElementById('file-input');
+        const previewIframe = document.getElementById('preview-iframe');
+        const saveButton = document.getElementById('save-button');
+        const statusMessage = document.getElementById('status-message');
+        const selectedElementTag = document.getElementById('selected-element-tag');
+        const inspectorTabs = document.getElementById('inspector-tabs');
+        const addElementButton = document.getElementById('add-element-button');
+        const deleteElementButton = document.getElementById('delete-element-button');
+        const duplicateElementButton = document.getElementById('duplicate-element-button');
+        const newElementTypeSelect = document.getElementById('new-element-type');
+        const addAttributeButton = document.getElementById('add-attribute-button');
+        const attributeList = document.getElementById('attribute-list');
+        const newAttrKeyInput = document.getElementById('new-attr-key');
+        const newAttrValueInput = document.getElementById('new-attr-value');
+        const elementIdInput = document.getElementById('element-id');
+        const elementClassInput = document.getElementById('element-class');
+        const elementContentTextarea = document.getElementById('element-content');
+        const hierarchyPanel = document.getElementById('hierarchy-panel');
+        const styleNameInput = document.getElementById('new-class-name');
+        const styleDefinitionTextarea = document.getElementById('new-class-definition');
+        const addClassButton = document.getElementById('add-class-button');
+        const classListDiv = document.getElementById('defined-class-list');
+        const jsGlobalsTextarea = document.getElementById('js-globals-content');
+        
+        const cssControls = {
+            'padding': 'padding',
+            'margin': 'margin',
+            'border': 'border',
+            'border-radius': 'borderRadius',
+            'box-shadow': 'boxShadow',
+            'display-select': 'display', 
+            'flex-direction-select': 'flexDirection',
+            'justify-content-select': 'justifyContent',
+            'grid-cols': 'gridTemplateColumns',
+            'grid-gap': 'gap',
+            'align-items-select': 'alignItems',
+            'box-sizing-select': 'boxSizing',
+            'width': 'width',
+            'height': 'height'
+        };
+
+        let activeElement = null; 
+        
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            document.querySelector(`.tab-button[data-tab="${tabId}"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function getOrCreateScriptTag(iframeDoc) {
+            let script = iframeDoc.getElementById('designer-js-globals');
+            if (!script) {
+                script = iframeDoc.createElement('script');
+                script.id = 'designer-js-globals';
+                script.type = 'text/javascript';
+                if (iframeDoc.body) {
+                    iframeDoc.body.appendChild(script);
+                } else {
+                    return null; 
+                }
+            }
+            return script;
+        }
+
+        function executeJsGlobals() {
+            const iframeWin = previewIframe.contentWindow;
+            const jsCode = jsGlobalsTextarea.value.trim();
+            const iframeDoc = iframeWin.document;
+
+            const jsScript = getOrCreateScriptTag(iframeDoc);
+            if (!jsScript) {
+                 statusMessage.textContent = 'Preview not ready for JS execution.';
+                 return;
+            }
+            jsScript.textContent = jsCode;
+            
+            if (jsCode) {
+                try {
+                    iframeWin.eval(jsCode);
+                    statusMessage.textContent = 'JavaScript executed successfully.';
+                } catch (e) {
+                    statusMessage.textContent = `JS Execution Error: ${e.message}. See console.`;
+                    console.error('JS Execution Error in Preview:', e);
+                }
+            } else {
+                statusMessage.textContent = 'JavaScript cleared and executed.';
+            }
+        }
+
+        function loadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            statusMessage.textContent = 'Loading file...';
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const htmlContent = e.target.result;
+                
+                const parser = new DOMParser();
+                const tempDoc = parser.parseFromString(htmlContent, 'text/html');
+                
+                const inlineScripts = Array.from(tempDoc.querySelectorAll('script:not([src])'));
+                
+                let combinedScriptContent = '';
+                
+                inlineScripts.forEach(script => {
+                    if (script.id !== 'designer-stylesheet' && script.id !== 'designer-main-script') { 
+                        combinedScriptContent += script.textContent.trim() + '\n\n';
+                    }
+                });
+
+                jsGlobalsTextarea.value = combinedScriptContent.trim() || '// All inline JS will be consolidated here upon load.\n// Add your global variables or functions here...';
+
+                const iframeDoc = previewIframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(htmlContent);
+                iframeDoc.close();
+                
+                const processIframeContent = (doc) => {
+                    setupIframeInteraction(doc);
+                    executeJsGlobals(); 
+                };
+
+                previewIframe.onload = () => processIframeContent(iframeDoc);
+                setTimeout(() => processIframeContent(iframeDoc), 100);
+
+                saveButton.disabled = false;
+                statusMessage.textContent = `File loaded successfully: ${file.name}. Click an element to inspect.`;
+                showTab('tab-content'); 
+            };
+            reader.readAsText(file);
+        }
+
+        function getOrCreateStyleSheet(iframeDoc) {
+            let style = iframeDoc.getElementById('designer-stylesheet');
+            if (!style) {
+                style = iframeDoc.createElement('style');
+                style.id = 'designer-stylesheet';
+                if (iframeDoc.head) {
+                    iframeDoc.head.appendChild(style);
+                } else {
+                    return null;
+                }
+            }
+            return style;
+        }
+
+        function setupIframeInteraction(iframeDoc) {
+            if (!iframeDoc || !iframeDoc.body) return;
+
+            getOrCreateStyleSheet(iframeDoc);
+            getOrCreateScriptTag(iframeDoc);
+
+            iframeDoc.body.querySelectorAll('*').forEach(el => {
+                if (el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE' && el.tagName !== 'HEAD') {
+                    el.setAttribute('contenteditable', 'false');
+                }
+            });
+
+            iframeDoc.addEventListener('click', (event) => {
+                event.preventDefault(); 
+                event.stopPropagation();
+                selectElement(event.target.tagName === 'HTML' ? iframeDoc.body : event.target);
+            });
+            
+            selectElement(iframeDoc.body);
+            generateProfilerData(iframeDoc);
+            renderHierarchy(iframeDoc);
+            renderStyles();
+        }
+        
+        function getElementDepth(el) {
+            let depth = 0;
+            let current = el.parentElement;
+            while (current && current.tagName !== 'BODY') {
+                depth++;
+                current = current.parentElement;
+            }
+            return depth;
+        }
+
+        function generateProfilerData(iframeDoc) {
+            const body = iframeDoc.body;
+            if (!body) return;
+
+            const allElements = Array.from(body.querySelectorAll('*'));
+            if (body.tagName === 'BODY') allElements.unshift(body); 
+
+            if (allElements.length === 0) {
+                document.getElementById('stat-element-count').textContent = 0;
+                document.getElementById('stat-max-depth').textContent = 0;
+                document.getElementById('stat-avg-depth').textContent = 0;
+                document.getElementById('stat-inline-styles').textContent = 0;
+                document.getElementById('stat-bloated-count').textContent = 0;
+                document.getElementById('tag-distribution').innerHTML = '<li class="text-gray-400">No elements found.</li>';
+                return;
+            }
+
+            let maxDepth = 0;
+            let totalDepth = 0;
+            let tagCounts = {};
+            let totalInlineStyles = 0;
+            let bloatedElementsCount = 0;
+
+            allElements.forEach(el => {
+                const depth = getElementDepth(el);
+                maxDepth = Math.max(maxDepth, depth);
+                totalDepth += depth;
+
+                const tag = el.tagName.toLowerCase();
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+
+                if (el.getAttribute('style')) {
+                    totalInlineStyles++;
+                }
+
+                if (el.attributes.length > 5) { 
+                    bloatedElementsCount++;
+                }
+            });
+            
+            const totalElements = allElements.length;
+            const avgDepth = totalElements > 0 ? (totalDepth / totalElements).toFixed(2) : 0;
+
+            document.getElementById('stat-element-count').textContent = totalElements;
+            document.getElementById('stat-max-depth').textContent = maxDepth;
+            document.getElementById('stat-avg-depth').textContent = avgDepth;
+            document.getElementById('stat-inline-styles').textContent = totalInlineStyles;
+            document.getElementById('stat-bloated-count').textContent = bloatedElementsCount;
+
+            const tagList = document.getElementById('tag-distribution');
+            tagList.innerHTML = '';
+            
+            const sortedTags = Object.entries(tagCounts).sort(([, a], [, b]) => b - a);
+
+            sortedTags.forEach(([tag, count]) => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="font-mono text-cyan-400">&lt;${tag.toUpperCase()}&gt;</span>: ${count}`;
+                tagList.appendChild(li);
+            });
+        }
+
+        function selectElement(element) {
+            if (activeElement) {
+                activeElement.style.outline = ''; 
+                activeElement.style.outlineOffset = '';
+                const oldHierarchyItem = hierarchyPanel.querySelector(`[data-node-id="${activeElement.getAttribute('data-node-id')}"]`);
+                if (oldHierarchyItem) oldHierarchyItem.classList.remove('active-node');
+            }
+            
+            activeElement = element;
+            
+            const isRoot = element.tagName === 'BODY' || element.tagName === 'HTML';
+            let id = element.getAttribute('data-node-id');
+            if (!id) {
+                id = Math.random().toString(36).substring(2, 9);
+                if (!isRoot) element.setAttribute('data-node-id', id);
+            }
+            
+            selectedElementTag.textContent = `<${element.tagName.toLowerCase()}>${element.id ? `#${element.id}` : ''}${element.className ? `.${element.className.split(' ').join('.')}` : ''}`;
+            
+            activeElement.style.outline = '3px solid #ef4444'; 
+            activeElement.style.outlineOffset = '-3px';
+
+            const hierarchyItem = hierarchyPanel.querySelector(`[data-node-id="${id}"]`);
+            if (hierarchyItem) hierarchyItem.classList.add('active-node');
+
+            const computedStyle = getComputedStyle(element);
+            
+            const canModify = !isRoot;
+            
+            addElementButton.disabled = false; 
+            deleteElementButton.disabled = !canModify;
+            duplicateElementButton.disabled = !canModify;
+            addAttributeButton.disabled = !canModify;
+            elementContentTextarea.disabled = !canModify;
+
+            elementIdInput.value = element.id || '';
+            elementClassInput.value = element.className || '';
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = element.innerHTML;
+            elementContentTextarea.value = tempDiv.innerHTML;
+            
+            for (const inputId in cssControls) {
+                const propName = cssControls[inputId];
+                const input = document.getElementById(inputId);
+                if (input) {
+                    let value = element.style[propName] || computedStyle[propName] || '';
+                    if (input.tagName === 'SELECT') {
+                        input.value = value;
+                    } else {
+                        input.value = value;
+                    }
+                }
+            }
+            
+            renderAttributes();
+            renderHierarchy(previewIframe.contentWindow.document);
+            renderStyles();
+        }
+
+        function renderHierarchy(iframeDoc) {
+            hierarchyPanel.innerHTML = '';
+            if (!iframeDoc || !iframeDoc.body) {
+                hierarchyPanel.innerHTML = '<p class="text-gray-500">Iframe content not ready.</p>';
+                return;
+            }
+
+            const body = iframeDoc.body;
+            const tree = buildHierarchyNode(body);
+            hierarchyPanel.appendChild(tree);
+        }
+
+        function buildHierarchyNode(element) {
+            const container = document.createElement('div');
+            const isCollapsed = element.getAttribute('data-collapsed') === 'true';
+
+            let tag = element.tagName.toLowerCase();
+            let labelText = `<${tag}>`;
+            if (element.id) labelText += `#${element.id}`;
+            if (element.className && element.className.trim()) labelText += `.${element.className.trim().split(/\s+/).join('.')}`;
+
+            const children = Array.from(element.children).filter(el => el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE');
+            const hasChildren = children.length > 0;
+            
+            if (!element.getAttribute('data-node-id') && element.tagName !== 'HTML') {
+                element.setAttribute('data-node-id', Math.random().toString(36).substring(2, 9));
+            }
+            const nodeId = element.getAttribute('data-node-id');
+
+            const item = document.createElement('div');
+            item.className = `hierarchy-item ${activeElement === element ? 'active-node' : ''}`;
+            item.setAttribute('data-node-id', nodeId);
+            item.innerHTML = `
+                <span class="hierarchy-toggle">${hasChildren ? (isCollapsed ? '►' : '▼') : '—'}</span>
+                <span data-select-id="${nodeId}">${labelText}</span>
+            `;
+
+            item.querySelector('span[data-select-id]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectElement(element);
+            });
+
+            if (hasChildren) {
+                item.querySelector('.hierarchy-toggle').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const childrenContainer = container.querySelector('.hierarchy-children');
+                    if (childrenContainer) {
+                        const newState = !isCollapsed;
+                        element.setAttribute('data-collapsed', newState);
+                        childrenContainer.classList.toggle('collapsed', newState);
+                        item.querySelector('.hierarchy-toggle').textContent = newState ? '►' : '▼';
+                    }
+                });
+            }
+
+            container.appendChild(item);
+
+            if (hasChildren) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = `hierarchy-children ${isCollapsed ? 'collapsed' : ''}`;
+                children.forEach(child => {
+                    childrenContainer.appendChild(buildHierarchyNode(child));
+                });
+                container.appendChild(childrenContainer);
+            }
+
+            return container;
+        }
+
+        function renderAttributes() {
+            attributeList.innerHTML = '';
+            if (!activeElement || activeElement.tagName === 'BODY' || activeElement.tagName === 'HTML') {
+                attributeList.innerHTML = '<p class="text-xs text-gray-500">No element selected or element is root.</p>';
+                return;
+            }
+
+            const isRoot = activeElement.tagName === 'BODY' || activeElement.tagName === 'HTML';
+            if (isRoot) return;
+
+            const attributes = Array.from(activeElement.attributes).filter(attr => attr.name !== 'id' && attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'contenteditable' && attr.name !== 'data-node-id');
+
+            if (attributes.length === 0) {
+                 attributeList.innerHTML = '<p class="text-xs text-gray-500">No custom attributes.</p>';
+                 return;
+            }
+
+            attributes.forEach(attr => {
+                const container = document.createElement('div');
+                container.className = 'flex justify-between space-x-1 items-center';
+                container.innerHTML = `
+                    <input type="text" value="${attr.name}" data-old-key="${attr.name}" class="attribute-input bg-gray-600 text-yellow-300" disabled>
+                    <input type="text" value="${attr.value}" data-key="${attr.name}" class="attribute-input attr-value-input">
+                    <button class="bg-red-500 hover:bg-red-600 text-white p-0.5 text-xs rounded" data-key="${attr.name}">X</button>
+                `;
+                container.querySelector('.attr-value-input').addEventListener('input', updateAttribute);
+                container.querySelector('button').addEventListener('click', deleteAttribute);
+                attributeList.appendChild(container);
+            });
+        }
+
+        function updateAttribute(event) {
+            if (!activeElement) return;
+            const key = event.target.getAttribute('data-key');
+            const value = event.target.value;
+            activeElement.setAttribute(key, value);
+            statusMessage.textContent = `Attribute '${key}' updated.`;
+        }
+
+        function deleteAttribute(event) {
+            if (!activeElement) return;
+            const key = event.target.getAttribute('data-key');
+            activeElement.removeAttribute(key);
+            renderAttributes();
+            statusMessage.textContent = `Attribute '${key}' removed.`;
+        }
+        
+        function addAttribute() {
+            if (!activeElement || activeElement.tagName === 'BODY' || activeElement.tagName === 'HTML') return;
+            const key = newAttrKeyInput.value.trim();
+            const value = newAttrValueInput.value.trim();
+
+            if (key && !['id', 'class', 'style', 'contenteditable', 'data-node-id'].includes(key.toLowerCase())) {
+                activeElement.setAttribute(key, value);
+                newAttrKeyInput.value = '';
+                newAttrValueInput.value = '';
+                renderAttributes();
+                statusMessage.textContent = `New attribute '${key}' added.`;
+            } else if (key) {
+                statusMessage.textContent = `Error: Cannot add reserved attribute '${key}' here (use Content tab).`;
+            }
+        }
+
+        function applyStyle(event) {
+            if (!activeElement) return;
+
+            const inputId = event.target.id;
+            const propertyName = cssControls[inputId];
+            let value = event.target.value;
+
+            const propertiesRequiringUnits = ['width', 'height', 'margin', 'padding', 'border-radius', 'grid-gap'];
+            if (propertiesRequiringUnits.includes(propertyName) && value && !isNaN(parseFloat(value))) {
+                if (value.toLowerCase() !== 'auto' && !value.match(/(px|em|rem|%|vh|vw|fr)$/i)) {
+                     value = value.trim() + 'px'; 
+                }
+            }
+            
+            activeElement.style[propertyName] = value;
+            statusMessage.textContent = `Applied style "${propertyName}: ${value}" to <${activeElement.tagName.toLowerCase()}>.`;
+        }
+        
+        function addElement() {
+            if (!previewIframe.contentWindow) return;
+
+            const iframeDoc = previewIframe.contentWindow.document;
+            const targetElement = activeElement && activeElement.tagName !== 'HTML' ? activeElement : iframeDoc.body;
+            
+            const elementType = newElementTypeSelect.value.toLowerCase();
+            const newElement = iframeDoc.createElement(elementType);
+            
+            newElement.style.padding = '8px';
+            newElement.style.margin = '5px';
+            newElement.style.border = '1px dashed #999';
+
+            if (elementType === 'button') {
+                newElement.textContent = 'New Button';
+                newElement.style.backgroundColor = '#4f46e5';
+                newElement.style.color = '#fff';
+                newElement.style.borderRadius = '4px';
+                newElement.style.cursor = 'pointer';
+                newElement.style.display = 'inline-block';
+            } else if (elementType === 'input') {
+                newElement.type = 'text';
+                newElement.style.padding = '4px';
+                newElement.style.width = '150px';
+                newElement.setAttribute('placeholder', 'New Input Field');
+            } else if (elementType === 'a') {
+                newElement.textContent = 'New Link';
+                newElement.href = '#';
+                newElement.style.color = '#7dd3fc';
+            } else if (elementType === 'h2') {
+                newElement.innerHTML = `New Heading`;
+                newElement.style.fontSize = '24px';
+                newElement.style.fontWeight = 'bold';
+                newElement.style.color = '#fff';
+                newElement.style.margin = '10px 5px';
+            } else if (elementType === 'img') {
+                newElement.src = 'https://placehold.co/150x100/000000/FFFFFF?text=New+Image';
+                newElement.alt = 'New Placeholder Image';
+                newElement.style.display = 'block';
+            } else { 
+                newElement.innerHTML = `New &lt;${elementType.toUpperCase()}&gt; (Edit Content)`;
+                newElement.style.minHeight = '20px';
+                newElement.style.backgroundColor = '#3e3e3e';
+            }
+            
+            targetElement.appendChild(newElement);
+            selectElement(newElement); 
+            generateProfilerData(iframeDoc);
+            renderHierarchy(iframeDoc);
+            statusMessage.textContent = `New <${elementType}> element added.`;
+        }
+
+        function deleteElement() {
+            if (!activeElement || activeElement.tagName === 'BODY' || activeElement.tagName === 'HTML') {
+                statusMessage.textContent = 'Cannot delete root elements (HTML/BODY).';
+                return;
+            }
+
+            const parent = activeElement.parentElement;
+            if (parent) {
+                const deletedTagName = activeElement.tagName.toLowerCase();
+                parent.removeChild(activeElement);
+                
+                selectElement(parent);
+                generateProfilerData(previewIframe.contentWindow.document);
+                renderHierarchy(previewIframe.contentWindow.document);
+                statusMessage.textContent = `Element <${deletedTagName}> deleted. Parent selected.`;
+            }
+        }
+        
+        function duplicateElement() {
+            if (!activeElement || activeElement.tagName === 'BODY' || activeElement.tagName === 'HTML') {
+                statusMessage.textContent = 'Cannot duplicate root elements (HTML/BODY).';
+                return;
+            }
+
+            try {
+                const clonedElement = activeElement.cloneNode(true);
+                
+                clonedElement.style.outline = '';
+                clonedElement.style.outlineOffset = '';
+                clonedElement.removeAttribute('data-node-id');
+
+                activeElement.after(clonedElement); 
+                
+                selectElement(clonedElement); 
+                generateProfilerData(previewIframe.contentWindow.document);
+                renderHierarchy(previewIframe.contentWindow.document);
+                statusMessage.textContent = `Element <${clonedElement.tagName.toLowerCase()}> duplicated.`;
+
+            } catch (e) {
+                statusMessage.textContent = 'Error during duplication. See console for details.';
+            }
+        }
+
+        function saveFile() {
+            if (!previewIframe.contentWindow) return;
+
+            const iframeDoc = previewIframe.contentWindow.document;
+
+            if (activeElement && activeElement.tagName !== 'BODY' && activeElement.tagName !== 'HTML') {
+                const newId = elementIdInput.value.trim();
+                const newClass = elementClassInput.value.trim();
+                const newContent = elementContentTextarea.value;
+                
+                if (activeElement.id !== newId) {
+                    activeElement.id = newId;
+                }
+                if (activeElement.className !== newClass) {
+                    activeElement.className = newClass;
+                    renderStyles(); 
+                }
+                if (activeElement.innerHTML !== newContent) {
+                     activeElement.innerHTML = newContent;
+                }
+                generateProfilerData(iframeDoc);
+                renderHierarchy(iframeDoc);
+            }
+
+            const scriptsToRemove = Array.from(iframeDoc.querySelectorAll('script:not([src])'));
+            scriptsToRemove.forEach(script => {
+                if (script.id !== 'designer-main-script') {
+                    script.remove();
+                }
+            });
+
+            const jsScript = getOrCreateScriptTag(iframeDoc);
+            if(jsScript) {
+                jsScript.textContent = jsGlobalsTextarea.value.trim();
+                iframeDoc.body.appendChild(jsScript);
+            }
+
+            if(activeElement) {
+                activeElement.style.outline = '';
+                activeElement.style.outlineOffset = '';
+            }
+            
+            iframeDoc.querySelectorAll('[data-node-id]').forEach(el => el.removeAttribute('data-node-id'));
+            iframeDoc.querySelectorAll('[data-collapsed]').forEach(el => el.removeAttribute('data-collapsed'));
+            
+            let newContent = iframeDoc.documentElement.outerHTML;
+
+            if(activeElement) {
+                activeElement.style.outline = '3px solid #ef4444'; 
+                activeElement.style.outlineOffset = '-3px';
+            }
+            
+            const blob = new Blob([newContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'modified_page.html';
+            
+            a.click();
+
+            URL.revokeObjectURL(url);
+            statusMessage.textContent = 'File downloaded! Check your downloads folder for "modified_page.html".';
+        }
+
+        function addClassDefinition() {
+            const className = styleNameInput.value.trim();
+            const definition = styleDefinitionTextarea.value.trim();
+
+            if (!className || !definition) {
+                statusMessage.textContent = 'Error: Class name and definition must not be empty.';
+                return;
+            }
+
+            if (!className.startsWith('.')) {
+                 statusMessage.textContent = 'Error: Class name must start with a dot (e.g., .my-class).';
+                 return;
+            }
+
+            const iframeDoc = previewIframe.contentWindow.document;
+            if (!iframeDoc) return;
+            const styleElement = getOrCreateStyleSheet(iframeDoc);
+            if (!styleElement) return; // Guard for style element creation failure
+
+            let newStyleSheet = '';
+            let isUpdated = false;
+            
+            let existingRules = styleElement.textContent.split('}');
+            
+            for (let i = 0; i < existingRules.length; i++) {
+                const rule = existingRules[i].trim();
+                if (!rule) continue;
+
+                if (rule.includes(className)) {
+                    newStyleSheet += `${className} { ${definition} }\n`;
+                    isUpdated = true;
+                } else {
+                    newStyleSheet += rule + '}\n';
+                }
+            }
+            
+            if (!isUpdated) {
+                newStyleSheet += `${className} { ${definition} }\n`;
+            }
+
+            styleElement.textContent = newStyleSheet.trim();
+            styleNameInput.value = '';
+            styleDefinitionTextarea.value = '';
+            statusMessage.textContent = `Class '${className}' ${isUpdated ? 'updated' : 'added'} successfully.`;
+            renderStyles();
+        }
+
+        function renderStyles() {
+            classListDiv.innerHTML = '';
+            const iframeDoc = previewIframe.contentWindow.document;
+            if (!iframeDoc) return;
+            const styleElement = getOrCreateStyleSheet(iframeDoc);
+            if (!styleElement) return; // Guard for style element access failure
+            
+            let classNames = [];
+            const regex = /\.([a-zA-Z0-9_-]+)\s*\{/g;
+            let match;
+            while (match = regex.exec(styleElement.textContent)) {
+                if (match[1]) classNames.push(match[1]);
+            }
+            
+            if (classNames.length === 0) {
+                 classListDiv.innerHTML = '<p class="text-gray-500">No custom classes defined yet.</p>';
+                 return;
+            }
+            
+            const activeClasses = activeElement ? activeElement.className.split(/\s+/).filter(c => c) : [];
+
+            classNames.forEach(name => {
+                const isApplied = activeClasses.includes(name);
+                
+                const container = document.createElement('div');
+                container.className = 'class-toggle-container';
+                container.innerHTML = `
+                    <input type="checkbox" id="class-toggle-${name}" class="class-toggle-input" ${isApplied ? 'checked' : ''} data-class-name="${name}">
+                    <label for="class-toggle-${name}" class="class-toggle-label">.${name}</label>
+                `;
+                container.querySelector('.class-toggle-input').addEventListener('change', toggleCustomClass);
+                classListDiv.appendChild(container);
+            });
+        }
+
+        function toggleCustomClass(event) {
+            if (!activeElement || activeElement.tagName === 'BODY' || activeElement.tagName === 'HTML') {
+                statusMessage.textContent = 'Error: Select an element to apply a class.';
+                event.target.checked = !event.target.checked;
+                return;
+            }
+            
+            const className = event.target.getAttribute('data-class-name');
+            const classList = activeElement.className.split(/\s+/).filter(c => c);
+
+            if (event.target.checked) {
+                if (!classList.includes(className)) {
+                    classList.push(className);
+                    statusMessage.textContent = `Class .${className} applied.`;
+                }
+            } else {
+                const index = classList.indexOf(className);
+                if (index > -1) {
+                    classList.splice(index, 1);
+                    statusMessage.textContent = `Class .${className} removed.`;
+                }
+            }
+            activeElement.className = classList.join(' ');
+            elementClassInput.value = activeElement.className;
+        }
+
+        fileInput.addEventListener('change', loadFile);
+        saveButton.addEventListener('click', saveFile);
+        jsGlobalsTextarea.addEventListener('input', executeJsGlobals);
+
+        addElementButton.addEventListener('click', addElement);
+        deleteElementButton.addEventListener('click', deleteElement);
+        duplicateElementButton.addEventListener('click', duplicateElement);
+        addAttributeButton.addEventListener('click', addAttribute);
+        addClassButton.addEventListener('click', addClassDefinition);
+        
+        inspectorTabs.addEventListener('click', (event) => {
+            if (event.target.classList.contains('tab-button')) {
+                showTab(event.target.getAttribute('data-tab'));
+            }
+        });
+
+        Object.keys(cssControls).forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('input', applyStyle);
+                if (input.tagName === 'SELECT') {
+                     input.addEventListener('change', applyStyle);
+                }
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            showTab('tab-content');
+        });
+
+    </script>
+</body>
+</html>

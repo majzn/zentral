@@ -1,0 +1,223 @@
+#version 330 core
+out vec4 fragCol;
+in vec3 outPos;
+in vec2 outUV;
+
+uniform float pX;
+uniform float pY;
+uniform float pZ;
+uniform float pPitch;
+uniform float pPan;
+uniform float resX;
+uniform float resY;
+
+uniform float wScale;
+uniform float wHeight;
+uniform float wWarpX;
+uniform float wWarpY;
+uniform float wWarpAmt;
+uniform float wPersistance;
+uniform int wOctaves;
+uniform int wWarpOctaves;
+
+uniform float wFogAmt;
+uniform float wFogEnd;
+uniform float wFogStart;
+
+uniform vec3 wSunDir;
+uniform vec3 wSunColour;
+uniform float wSunAmt;
+
+uniform vec3 wAmbient;
+uniform vec3 wBackground;
+
+#define M1 1597334677U /* 1719413*929 */
+#define M2 3812015801U /* 140473*2467*11 */
+
+#define MAX_MARCH 10000
+#define MAX_DIST 10000.0
+#define HIT_DIST 0.001
+
+float NoiseHashFast(int x, int y) {
+  uint ux = uint(x);
+  uint uy = uint(y);
+  ux *= M1; 
+  uy *= M2;
+  return float((ux ^ uy) * M1) * (1.0/float(uint(0xffffffffU)));
+}
+
+float NoiseValue2D(float x, float y) {
+  int ix = int(floor(x));
+  int iy = int(floor(y));
+  float fx = (x - ix);
+  float fy = (y - iy);
+  float a = NoiseHashFast(ix, iy);
+  float b = NoiseHashFast(ix + 1, iy);
+  float c = NoiseHashFast(ix, iy + 1);
+  float d = NoiseHashFast(ix + 1, iy + 1);
+  float ux = (fx * fx * (3.0 - 2.0*fx));
+  float uy = (fy * fy * (3.0 - 2.0*fy));
+  return mix(a, b, ux) + (c - a) * uy * (1.0 - ux) + (d - b) * ux * uy;
+}
+
+float NoiseOctave2D(
+    float x, float y, float scale, float persistance, int octaves) {
+  float ret;
+  float fx, fy;
+  float freq = 1.0;
+  float pers = 1.0;
+  float acc = 0.0;
+  int i;
+  ret = 0.0;
+  for(i = 0; i < octaves; i++) {
+    fx = (x * scale) * freq;
+    fy = (y * scale) * freq;
+    ret += NoiseValue2D(fx, fy) * pers;
+    acc += pers;
+    freq *= 2.0;
+    pers *= persistance;
+  }
+  return ret / acc;
+}
+
+float NoiseDomainWarp2D(
+    float x, float y, float dx, float dy,
+    float warp, float scale, float pers,
+    int noiseOctaves, int warpOctaves) {
+  float dwx = 
+    NoiseOctave2D(x, y, scale, pers, warpOctaves);
+  float dwy = 
+    NoiseOctave2D(x + dx, y + dy, scale, pers, warpOctaves);
+  return 
+    NoiseOctave2D(x + warp*dwx, y + warp*dwy, scale, pers, noiseOctaves);
+}
+
+float SmoothSubtract(float d1, float d2, float k ) {
+  float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
+  return mix( d2, -d1, h ) + k*h*(1.0-h);
+}
+
+
+vec4 Map(vec3 p) {
+  float r = 0.1;
+  float s = 0.001;
+  float m = 1.0;
+  float n = 0.0;
+  return vec4(p.y, p.y, p.y, p.y - n);
+}
+
+vec4 RayMarch(vec3 rayOrig, vec3 rayDir) {
+  float dist = 0.0;
+  vec4 dS;
+  for(int i = 0; i < MAX_MARCH; i++) {
+    vec3 p = rayOrig + rayDir * dist;
+    dS = Map(p);
+    dist += dS.w;
+    if(dist > MAX_DIST || dS.w < HIT_DIST) { break; }
+  }
+  return vec4(dS.x, dS.y, dS.z, dist);
+}
+
+mat3 rotateX(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(vec3(1, 0, 0), vec3(0, c, -s), vec3(0, s, c));
+}
+
+mat3 rotateY(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(vec3(c, 0, s), vec3(0, 1, 0), vec3(-s, 0, c));
+}
+
+mat3 rotateZ(float theta) {
+  float c = cos(theta);
+  float s = sin(theta);
+  return mat3(vec3(c, -s, 0), vec3(s, c, 0), vec3(0, 0, 1));
+}
+
+vec3 GetNormal(vec3 p) {
+  float d = Map(p).w;
+  vec2 e = vec2(0.1, 0.0);
+  vec3 n = d - vec3(
+    Map(p - e.xyy).w,
+    Map(p - e.yxy).w,
+    Map(p - e.yyx).w);
+  return normalize(n);
+}
+
+vec4 GetLight(vec3 p, vec3 col, vec3 pos) {
+  vec3 lightPos = pos;
+  vec3 l = lightPos;
+  vec3 n = GetNormal(p);
+  float dif = dot(n, l);
+  return vec4(dif*col, dif);
+}
+
+vec3 Fog(float dist, vec3 inCol, vec3 col, float minDist, float maxDist) {
+  float factor = (maxDist - dist) / (maxDist - minDist);
+  factor = clamp(factor, 0.0, 1.0);
+  return mix(col, inCol, factor);
+}
+
+vec3 SkyColour(vec3 ro, vec3 rd) {
+  vec3 col = vec3(1.0,1.0,1.0)*0.3 - 0.3*rd.y;
+  col = mix(col, vec3(0.2,0.25,0.30)*0.5, exp(-5.0*rd.y));
+  return col;
+}
+
+float DistLine(vec3 ro, vec3 rd, vec3 p) {
+  rd.z = clamp(rd.z, 0, 1.0);
+  return length(cross(p - ro, rd))/length(rd);
+}
+
+float DrawPoint(vec3 ro, vec3 rd, vec3 p) {
+  float d = DistLine(ro, rd, p);
+  d = smoothstep(0.06, 0.04, d);
+  return d;
+}
+
+void main() {
+  vec2 res = vec2(resX, resY);
+  float fov = 2.0f;
+  vec2 uv = outUV - 0.5;
+  vec2 skyUV = outUV - 0.5;
+  uv.x *= (res.x / res.y)*fov;
+  uv.y *= fov;
+  skyUV.x *= (res.x / res.y)*fov;
+  skyUV.y *= fov;
+  vec3 playerPos = vec3(pX, pY, pZ);
+  vec4 finalCol = vec4(outPos.x, outPos.y, outPos.z, 1.0);
+  vec3 ro = vec3(pX, pY, pZ);
+  vec3 rd = vec3(uv.x, -uv.y, 1.0);
+  vec3 skyRD = vec3(skyUV.x, -skyUV.y, 1.0);
+  
+  rd *= rotateX(pPitch);
+  rd *= rotateY(pPan);
+
+  skyRD *= rotateX(pPitch);
+  skyRD *= rotateY(pPan);
+
+  
+
+#if 0  
+  vec4 march = RayMarch(ro, rd);
+  vec3 p = ro + rd * march.w;
+  
+  if(march.w >= MAX_DIST) { discard; }
+  if(march.w <= HIT_DIST) { discard; }
+  
+  vec3 diffuse = GetLight(p, wSunColour, wSunDir).xyz;
+  vec3 result = (wAmbient + diffuse);
+  
+  float fogDist = distance(p, playerPos);
+  vec3 fog = Fog(fogDist, result, wAmbient, wFogStart, wFogEnd);
+#endif
+  vec3 skyCol = wBackground;
+  vec3 sky = SkyColour(ro, rd);
+  float sun = DrawPoint(vec3(0.0, 0.0, 0.0), skyRD, wSunDir);
+  vec3 col = mix(skyCol, skyCol*0.7, min(max(sky, 0.0), 1.0));
+  col += vec3(0.95, 0.9, 0.6)*sun;
+  fragCol = vec4(col, 1.0);
+};
+

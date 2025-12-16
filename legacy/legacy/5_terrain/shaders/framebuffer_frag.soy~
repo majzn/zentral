@@ -1,0 +1,14 @@
+#version 330 core
+out vec4 fragCol;
+in vec3 outPos;
+in vec2 outUV;
+
+uniform sampler2D framebuffer;
+
+void main() {
+  vec4 tex = texture(framebuffer, outUV);
+  vec4 finalCol = vec4(outPos.x, outPos.y, outPos.z, 1.0);
+  if(tex.x == 0.0 && tex.y == 0.0 && tex.z == 0.0) { discard; }
+  fragCol = vec4(tex.xyz, 0.5);
+};
+

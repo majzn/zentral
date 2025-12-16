@@ -1,0 +1,16 @@
+#version 330 core
+out vec4 fragColor;
+in vec3 outPos;
+in vec2 outUV;
+
+uniform sampler2D framebuffer;
+
+void main() {
+  vec4 tex = texture(framebuffer, outUV);
+  if(tex.x > 0) {
+	fragColor = vec4(1.0, 1.0, 1.0, 1.0);
+  } else {
+    discard;
+  }
+};
+
