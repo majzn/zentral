@@ -15,9 +15,10 @@ def rgb_to_hex(rgb):
     return '#%02x%02x%02x' % rgb
 
 def get_dark_version(hex_str, lightness=0.15):
-    """Returns a version of the color with fixed low lightness for backgrounds."""
+    """Returns a version of the color with fixed low lightness."""
     rgb = hex_to_rgb(hex_str)
     h, s, l = colorsys.rgb_to_hls(rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
+    # Force lightness to a specific dark value
     r, g, b = colorsys.hls_to_rgb(h, lightness, s)
     return rgb_to_hex((int(r*255), int(g*255), int(b*255)))
 
@@ -96,14 +97,11 @@ def generate_html(projects, args):
             padding: 0.5rem;
             display: flex; flex-direction: column; justify-content: space-between;
             background: var(--item-bg); transition: transform 0.5s ease;
-            color: #FFFFFF;
+            color: #FFFFFF; /* Ensure text is readable on dark brand bg */
         }}
         .card:hover {{ transform: translateY(-2px); }}
 
-        .title {{ 
-            font-size: 1.5rem; font-weight: 800; margin: 0.0rem 0 1.0rem 0; 
-            line-height: 1.0; color: var(--item-accent); /* Matched to border colour */
-        }}
+        .title {{ font-size: 1.5rem; font-weight: 800; margin: 0.0rem 0 1.0rem 0; line-height: 1.0; }}
         
         .card-actions {{ display: flex; gap: 0.5rem; margin-bottom: 1rem; }}
         .main-link, .docs-btn {{
@@ -139,6 +137,7 @@ def main():
     parser.add_argument("-o", "--output", default="index.html")
     parser.add_argument("-t", "--title", default="INDEX")
     
+    # Visual Params
     parser.add_argument("-bg", "--background", dest="bg", default="#FFFFFF")
     parser.add_argument("-fg", "--foreground", dest="fg", default="#000000")
     parser.add_argument("-a", "--accent", default="#000000")
@@ -149,9 +148,10 @@ def main():
     parser.add_argument("-m", "--max-width", type=int, default=720)
     parser.add_argument("-g", "--gap", type=int, default=16)
     
+    # Image & Darkness control
     parser.add_argument("-bi", "--bg-img", default="tile.bmp")
     parser.add_argument("-bs", "--bg-size", default="auto")
-    parser.add_argument("-cd", "--card-darkness", type=float, default=0.15)
+    parser.add_argument("-cd", "--card-darkness", type=float, default=0.15, help="Lightness value for card bg (0.0 to 1.0)")
 
     parser.add_argument("-ms", "--man-suffix", default="_man")
     parser.add_argument("-dl", "--docs-label", default="MAN")
@@ -179,7 +179,7 @@ def main():
     with open(args.output, "w", encoding='utf-8') as out:
         out.write(generate_html(project_data, args))
     
-    print(f"✨ Index generated with themed titles: {args.output}")
+    print(f"✨ Index generated: {args.output}")
 
 if __name__ == "__main__":
     main()

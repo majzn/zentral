@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Islamic Star Pattern Generator - Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        canvas {
+            cursor: move;
+            touch-action: none;
+        }
+        .control-panel {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        input[type="range"] {
+            accent-color: #38bdf8;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+        .snap-btn {
+            @apply px-2 py-1 text-[10px] rounded bg-slate-800 border border-slate-700 hover:bg-sky-900/40 hover:border-sky-500 transition-all text-slate-300;
+        }
+        .tiling-active {
+            @apply bg-sky-600 border-sky-400 text-white !important;
+        }
+    </style>
+</head>
+<body>
+
+<div class="flex flex-1 overflow-hidden">
+    <div class="flex-1 relative flex items-center justify-center bg-slate-950 overflow-hidden">
+        <canvas id="mainCanvas"></canvas>
+        <div class="absolute top-6 left-6 flex flex-col gap-2 pointer-events-none">
+            <div id="periodicityTag" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 backdrop-blur-md">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Active Lattice
+            </div>
+            <div id="symmetryTag" class="bg-sky-500/20 text-sky-400 border border-sky-500/30 px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-md">
+                Variable Base Mesh
+            </div>
+        </div>
+        <div class="absolute bottom-6 right-6 flex gap-2">
+            <button onclick="exportImage()" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-lg text-sm transition-all backdrop-blur-md flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Viewport
+            </button>
+            <button onclick="exportSeamless()" class="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-lg text-sm transition-all shadow-lg flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+                Seamless Square
+            </button>
+        </div>
+    </div>
+    <div class="w-80 control-panel flex flex-col h-full shadow-2xl z-10 custom-scrollbar overflow-y-auto p-6 space-y-8">
+        <div>
+            <h1 class="text-xl font-bold text-sky-400 mb-1">Star Generator</h1>
+            <p class="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-semibold">Variable Mesh Engine</p>
+        </div>
+        <section class="space-y-3">
+            <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Lattice Archetype</label>
+            <div class="grid grid-cols-2 gap-2" id="tilingButtons"></div>
+        </section>
+        <section class="space-y-6">
+            <div class="space-y-3" id="sidesControl">
+                <div class="flex justify-between items-center">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Edge Count (N)</label>
+                    <span id="sidesVal" class="text-xs text-sky-400">8</span>
+                </div>
+                <input type="range" id="sides" min="3" max="16" step="1" value="8" class="w-full">
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Expansion Factor</label>
+                    <span id="expansionVal" class="text-xs text-sky-400">1.0</span>
+                </div>
+                <input type="range" id="expansion" min="0.5" max="1.5" step="0.01" value="1.0" class="w-full">
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-end">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Contact Angle (θ)</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" id="angleNum" step="0.1" class="w-16 bg-slate-900 border border-slate-700 rounded text-xs px-1 text-sky-400 focus:outline-none focus:border-sky-500">
+                        <span class="text-xs text-slate-500">°</span>
+                    </div>
+                </div>
+                <input type="range" id="angle" min="1" max="89" step="0.1" value="60" class="w-full">
+                <div class="flex flex-wrap gap-1.5 mt-2" id="snapContainer"></div>
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Delta Offset (δ)</label>
+                    <span id="deltaVal" class="text-xs text-sky-400">0%</span>
+                </div>
+                <input type="range" id="delta" min="0" max="95" step="1" value="0" class="w-full">
+            </div>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Scale</label>
+                    <span id="sizeVal" class="text-xs text-sky-400">120</span>
+                </div>
+                <input type="range" id="size" min="40" max="400" step="1" value="120" class="w-full">
+            </div>
+        </section>
+        <section class="space-y-4 pt-4 border-t border-slate-800">
+            <div class="flex items-center justify-between">
+                <label class="text-xs text-slate-400 font-medium">Show Base Mesh</label>
+                <input type="checkbox" id="showGrid" checked class="w-4 h-4 rounded bg-slate-800 border-slate-700">
+            </div>
+            <div class="flex items-center justify-between">
+                <label class="text-xs text-slate-400 font-medium">Preview Seamless</label>
+                <input type="checkbox" id="previewCrop" class="w-4 h-4 rounded bg-slate-800 border-slate-700">
+            </div>
+            <div class="space-y-2">
+                <label class="text-xs text-slate-400 font-medium">Colors</label>
+                <div class="flex gap-2">
+                    <input type="color" id="patternColor" value="#38bdf8" class="w-full h-8 rounded bg-transparent cursor-pointer border-none">
+                    <input type="color" id="gridColor" value="#1e293b" class="w-full h-8 rounded bg-transparent cursor-pointer border-none">
+                </div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-xs text-slate-400 font-medium">Weight</label>
+                <input type="range" id="strokeWeight" min="0.5" max="15" step="0.5" value="2" class="w-full">
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+class Point {
+    constructor(x, y) { this.x = x; this.y = y; }
+}
+
+function intersect(p1, v1, p2, v2) {
+    const det = v2.x * v1.y - v2.y * v1.x;
+    if (Math.abs(det) < 0.00001) return null;
+    const t = (v2.x * (p2.y - p1.y) - v2.y * (p2.x - p1.x)) / det;
+    if (t < 0) return null; 
+    return new Point(p1.x + t * v1.x, p1.y + t * v1.y);
+}
+
+class Tile {
+    constructor(vertices) { this.vertices = vertices; }
+    getEdges() {
+        const edges = [];
+        for (let i = 0; i < this.vertices.length; i++) {
+            edges.push({ a: this.vertices[i], b: this.vertices[(i + 1) % this.vertices.length] });
+        }
+        return edges;
+    }
+    draw(ctx, color) {
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(this.vertices[0].x, this.vertices[0].y);
+        for (let i = 1; i < this.vertices.length; i++) ctx.lineTo(this.vertices[i].x, this.vertices[i].y);
+        ctx.closePath();
+        ctx.stroke();
+    }
+    generateMotif(angleRad, deltaPercent) {
+        const edges = this.getEdges();
+        const rays = [];
+        edges.forEach(edge => {
+            const dx = edge.b.x - edge.a.x, dy = edge.b.y - edge.a.y;
+            const len = Math.sqrt(dx*dx + dy*dy);
+            const ux = dx/len, uy = dy/len, nx = -uy, ny = ux;
+            const mid = new Point((edge.a.x + edge.b.x) / 2, (edge.a.y + edge.b.y) / 2);
+            const deltaPx = (deltaPercent / 100) * (len / 2);
+            const p1 = new Point(mid.x - ux * deltaPx, mid.y - uy * deltaPx);
+            const p2 = new Point(mid.x + ux * deltaPx, mid.y + uy * deltaPx);
+            rays.push({ p: p1, v: { x: ux*Math.cos(angleRad) + nx*Math.sin(angleRad), y: uy*Math.cos(angleRad) + ny*Math.sin(angleRad) } });
+            rays.push({ p: p2, v: { x: -ux*Math.cos(angleRad) + nx*Math.sin(angleRad), y: -uy*Math.cos(angleRad) + ny*Math.sin(angleRad) } });
+        });
+        const lines = [];
+        for (let i = 0; i < edges.length; i++) {
+            const rOut = rays[2 * i + 1], next = (i + 1) % edges.length, rIn = rays[2 * next];
+            const hit = intersect(rOut.p, rOut.v, rIn.p, rIn.v);
+            if (hit) lines.push({ a: rOut.p, b: hit }, { a: rIn.p, b: hit });
+        }
+        return lines;
+    }
+}
+
+const canvas = document.getElementById('mainCanvas'), ctx = canvas.getContext('2d');
+let state = {
+    tilingType: 'radial',
+    sides: 8,
+    expansion: 1.0,
+    angle: 60,
+    delta: 0,
+    size: 120,
+    showGrid: true,
+    previewCrop: false,
+    patternColor: '#38bdf8',
+    gridColor: '#1e293b',
+    strokeWeight: 2,
+    zoom: 1,
+    offset: { x: 0, y: 0 }
+};
+
+const ARCHETYPES = {
+    radial: { name: 'Radial Star', showSides: true },
+    ortho: { name: 'Orthogonal', showSides: true },
+    hexagonal: { name: 'Hex Lattice', showSides: false },
+    cairo: { name: 'Cairo Dual', showSides: false }
+};
+
+function initUI() {
+    const container = document.getElementById('tilingButtons');
+    Object.keys(ARCHETYPES).forEach(key => {
+        const btn = document.createElement('button');
+        btn.innerText = ARCHETYPES[key].name;
+        btn.className = `py-2 px-3 rounded bg-slate-800 hover:bg-slate-700 text-xs transition border border-slate-700 text-center`;
+        btn.onclick = () => setTiling(key);
+        btn.id = `btn-${key}`;
+        container.appendChild(btn);
+    });
+    setTiling(state.tilingType);
+}
+
+function setTiling(type) {
+    state.tilingType = type;
+    document.querySelectorAll('#tilingButtons button').forEach(b => b.classList.remove('tiling-active'));
+    document.getElementById(`btn-${type}`).classList.add('tiling-active');
+    document.getElementById('sidesControl').style.display = ARCHETYPES[type].showSides ? 'block' : 'none';
+    updateSnaps();
+    render();
+}
+
+function updateSnaps() {
+    const container = document.getElementById('snapContainer');
+    container.innerHTML = '<span class="text-[10px] text-slate-600 w-full mb-1">Geometric Snaps:</span>';
+    const n = ARCHETYPES[state.tilingType].showSides ? state.sides : 6;
+    [30, 45, 60, 90 - 180/n].forEach(s => {
+        if (s <= 0 || s >= 90) return;
+        const btn = document.createElement('button');
+        btn.className = 'snap-btn';
+        btn.innerText = s.toFixed(1) + '°';
+        btn.onclick = () => { state.angle = s; document.getElementById('angle').value = s; document.getElementById('angleNum').value = s; render(); };
+        container.appendChild(btn);
+    });
+}
+
+function generatePolygon(cx, cy, r, n, rot = 0) {
+    const pts = [];
+    for(let i=0; i<n; i++) pts.push(new Point(cx + r * Math.cos(rot + i*2*Math.PI/n), cy + r * Math.sin(rot + i*2*Math.PI/n)));
+    return new Tile(pts);
+}
+
+function generateTiling() {
+    const tiles = [], s = state.size, n = state.sides, exp = state.expansion, span = 5;
+    if (state.tilingType === 'radial') {
+        for (let i = -span; i < span; i++)
+            for (let j = -span; j < span; j++) {
+                const cx = i * s * 1.5, cy = j * s * 1.5 + (i%2 ? s*0.75 : 0);
+                tiles.push(generatePolygon(cx, cy, s/2 * exp, n));
+            }
+    } else if (state.tilingType === 'ortho') {
+        for (let i = -span; i < span; i++)
+            for (let j = -span; j < span; j++) {
+                tiles.push(generatePolygon(i*s, j*s, s/2 * exp, n));
+                if (n === 8) tiles.push(generatePolygon(i*s + s/2, j*s + s/2, s/4 * exp, 4, Math.PI/4));
+            }
+    } else if (state.tilingType === 'hexagonal') {
+        const h = s * Math.sqrt(3), w = s * 1.5;
+        for (let j = -span; j < span; j++)
+            for (let i = -span; i < span; i++) {
+                const cx = i * w * 2 + (j % 2 === 0 ? 0 : w), cy = j * h / 2;
+                tiles.push(generatePolygon(cx, cy, s * exp, 6));
+            }
+    } else if (state.tilingType === 'cairo') {
+        const b = s * 0.8;
+        for (let i = -span; i < span; i++)
+            for (let j = -span; j < span; j++) {
+                const ox = i * 2 * b, oy = j * 2 * b;
+                const pts = [new Point(0, 0), new Point(b, -b/2), new Point(2*b, 0), new Point(1.5*b, b), new Point(0.5*b, b)];
+                const centroid = new Point(b, b/2);
+                tiles.push(new Tile(pts.map(p => new Point(ox + centroid.x + (p.x-centroid.x)*exp, oy + centroid.y + (p.y-centroid.y)*exp))));
+                tiles.push(new Tile(pts.map(p => new Point(ox + b + centroid.x + (p.x-centroid.x)*exp, oy + b + centroid.y + (p.y-centroid.y)*exp))));
+            }
+    }
+    return tiles;
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width / 2 + state.offset.x, canvas.height / 2 + state.offset.y);
+    ctx.scale(state.zoom, state.zoom);
+    const tiles = generateTiling();
+    const angleRad = (state.angle * Math.PI) / 180;
+    if (state.showGrid) {
+        ctx.lineWidth = 1 / state.zoom;
+        tiles.forEach(t => t.draw(ctx, state.gridColor));
+    }
+    ctx.strokeStyle = state.patternColor;
+    ctx.lineWidth = state.strokeWeight / state.zoom;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    tiles.forEach(tile => {
+        const lines = tile.generateMotif(angleRad, state.delta);
+        ctx.beginPath();
+        lines.forEach(l => { ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); });
+        ctx.stroke();
+    });
+    if (state.previewCrop) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2 / state.zoom; ctx.setLineDash([5, 5]);
+        ctx.strokeRect(-state.size/2, -state.size/2, state.size, state.size);
+        ctx.setLineDash([]);
+    }
+    ctx.restore();
+}
+
+function exportImage() {
+    const link = document.createElement('a');
+    link.download = 'star-viewport.png'; link.href = canvas.toDataURL(); link.click();
+}
+
+function exportSeamless() {
+    const off = document.createElement('canvas');
+    const scale = 4, size = state.size;
+    off.width = size * scale; off.height = size * scale;
+    const octx = off.getContext('2d');
+    octx.fillStyle = '#0f172a'; octx.fillRect(0,0,off.width,off.height);
+    octx.scale(scale, scale); octx.translate(size/2, size/2);
+    const tiles = generateTiling();
+    const angleRad = (state.angle * Math.PI) / 180;
+    octx.strokeStyle = state.patternColor; octx.lineWidth = state.strokeWeight;
+    octx.lineCap = 'round'; octx.lineJoin = 'round';
+    tiles.forEach(tile => {
+        const lines = tile.generateMotif(angleRad, state.delta);
+        octx.beginPath(); lines.forEach(l => { octx.moveTo(l.a.x, l.a.y); octx.lineTo(l.b.x, l.b.y); }); octx.stroke();
+    });
+    const link = document.createElement('a');
+    link.download = 'seamless-tile.png'; link.href = off.toDataURL(); link.click();
+}
+
+document.getElementById('sides').addEventListener('input', e => { state.sides = parseInt(e.target.value); document.getElementById('sidesVal').innerText = state.sides; updateSnaps(); render(); });
+document.getElementById('expansion').addEventListener('input', e => { state.expansion = parseFloat(e.target.value); document.getElementById('expansionVal').innerText = state.expansion.toFixed(2); render(); });
+document.getElementById('angle').addEventListener('input', e => { state.angle = parseFloat(e.target.value); document.getElementById('angleNum').value = state.angle; render(); });
+document.getElementById('angleNum').addEventListener('input', e => { state.angle = parseFloat(e.target.value) || 0; document.getElementById('angle').value = state.angle; render(); });
+document.getElementById('delta').addEventListener('input', e => { state.delta = parseFloat(e.target.value); document.getElementById('deltaVal').innerText = state.delta + '%'; render(); });
+document.getElementById('size').addEventListener('input', e => { state.size = parseInt(e.target.value); document.getElementById('sizeVal').innerText = state.size; render(); });
+document.getElementById('showGrid').addEventListener('change', e => { state.showGrid = e.target.checked; render(); });
+document.getElementById('previewCrop').addEventListener('change', e => { state.previewCrop = e.target.checked; render(); });
+document.getElementById('patternColor').addEventListener('input', e => { state.patternColor = e.target.value; render(); });
+document.getElementById('gridColor').addEventListener('input', e => { state.gridColor = e.target.value; render(); });
+document.getElementById('strokeWeight').addEventListener('input', e => { state.strokeWeight = parseFloat(e.target.value); render(); });
+
+let isDragging = false, lastMouse = { x: 0, y: 0 };
+canvas.addEventListener('mousedown', e => { isDragging = true; lastMouse = { x: e.clientX, y: e.clientY }; });
+window.addEventListener('mousemove', e => { if (isDragging) { state.offset.x += e.clientX - lastMouse.x; state.offset.y += e.clientY - lastMouse.y; lastMouse = { x: e.clientX, y: e.clientY }; render(); } });
+window.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('wheel', e => { e.preventDefault(); state.zoom *= (1 - e.deltaY * 0.001); state.zoom = Math.max(0.05, Math.min(20, state.zoom)); render(); }, { passive: false });
+
+window.addEventListener('resize', () => { canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight; render(); });
+initUI(); window.dispatchEvent(new Event('resize'));
+</script>
+</body>
+</html>
